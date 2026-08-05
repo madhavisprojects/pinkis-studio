@@ -1,0 +1,7 @@
+node_modules/
+.env
+.env.local
+*.zip
+*.log
+.elasticbeanstalk/logs/
+.elasticbeanstalk/app_versions/
