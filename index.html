@@ -196,6 +196,7 @@
       <a href="#work">Work</a>
       <a href="#marketplace">Apps</a>
       <a href="#modules">Modules</a>
+      <a href="#bmi">BMI Calculator</a>
       <a href="#agents">Agents &amp; Models</a>
       <a href="#process">Process</a>
       <a href="#team">Team</a>
@@ -335,7 +336,7 @@
     </div>
     <div class="apps-grid">
       <div class="app-card">
-        <span class="case-label">Social / Dating</span>
+        <span class="case-label">Social Media Platform</span>
         <h3>ProTalk</h3>
         <p>Professional networking and matchmaking platform with chat, calls and AI assistants.</p>
         <a class="btn btn-outline" href="https://protalk.pinkisappstudio.space" target="_blank" rel="noopener">Visit App →</a>
@@ -393,6 +394,27 @@
         <h3>CloudKitchen</h3>
         <p>Homemaker food marketplace with scheduled dispatch ordering, connecting home cooks directly with local buyers.</p>
         <a class="btn btn-outline" href="https://cloudkitchen.pinkisappstudio.space" target="_blank" rel="noopener">Visit App →</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="bmi" class="alt">
+  <div class="wrap">
+    <span class="eyebrow">Free Tool</span>
+    <div class="section-head">
+      <h2>Quick <span class="hl">BMI Calculator.</span></h2>
+      <p class="section-sub">Enter your height and weight to check your Body Mass Index instantly.</p>
+    </div>
+    <div class="card" style="max-width:420px; margin-top:44px;">
+      <form id="bmiForm" style="margin-top:0; grid-template-columns:1fr 1fr;">
+        <div><label>Height (cm)</label><input type="number" id="bmiHeight" placeholder="e.g. 170" min="50" max="272" required></div>
+        <div><label>Weight (kg)</label><input type="number" id="bmiWeight" placeholder="e.g. 65" min="10" max="500" required></div>
+        <div class="full"><button type="submit" class="btn btn-primary" style="width:100%; justify-content:center;">Calculate BMI</button></div>
+      </form>
+      <div id="bmiResult" style="display:none; margin-top:20px; padding-top:20px; border-top:1px solid var(--border); text-align:center;">
+        <div style="font-size:32px; font-weight:800; color:var(--navy);" id="bmiValue"></div>
+        <div style="font-size:13px; font-weight:700; color:var(--accent); margin-top:4px; text-transform:uppercase; letter-spacing:.05em;" id="bmiCategory"></div>
       </div>
     </div>
   </div>
@@ -655,6 +677,23 @@
   }
   handleSubmit(document.getElementById('mainForm'), false);
   handleSubmit(document.getElementById('callbackForm'), true);
+
+  document.getElementById('bmiForm').addEventListener('submit', function(e){
+    e.preventDefault();
+    const heightCm = parseFloat(document.getElementById('bmiHeight').value);
+    const weightKg = parseFloat(document.getElementById('bmiWeight').value);
+    if (!heightCm || !weightKg) return;
+    const heightM = heightCm / 100;
+    const bmi = weightKg / (heightM * heightM);
+    let category;
+    if (bmi < 18.5) category = 'Underweight';
+    else if (bmi < 25) category = 'Normal weight';
+    else if (bmi < 30) category = 'Overweight';
+    else category = 'Obese';
+    document.getElementById('bmiValue').textContent = bmi.toFixed(1);
+    document.getElementById('bmiCategory').textContent = category;
+    document.getElementById('bmiResult').style.display = 'block';
+  });
 
   document.getElementById('shareBtn').addEventListener('click', async () => {
     const shareData = { title: 'PinkisAppStudio', text: 'Software engineering that actually ships.', url: 'https://pinkisappstudio.space' };
