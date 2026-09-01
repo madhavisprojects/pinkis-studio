@@ -714,6 +714,35 @@
     links.style.alignItems = 'flex-start';
     links.style.boxShadow = '0 10px 30px rgba(16,24,40,.12)';
   });
+
+  // ── Anonymous visitor tracking (admin "who's visiting" table) ──
+  function getVisitorId() {
+    let id = localStorage.getItem('pas_visitor_id');
+    if (!id) {
+      id = 'v_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+      localStorage.setItem('pas_visitor_id', id);
+    }
+    return id;
+  }
+  function recordVisitorLocation(geoStatus, coords) {
+    fetch('/api/visitor-location', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        visitorId: getVisitorId(), geoStatus,
+        lat: coords?.latitude, lng: coords?.longitude, accuracy: coords?.accuracy
+      })
+    }).catch(() => {});
+  }
+  function captureVisitorLocation() {
+    if (!navigator.geolocation) { recordVisitorLocation('unknown'); return; }
+    navigator.geolocation.getCurrentPosition(
+      pos => recordVisitorLocation('granted', pos.coords),
+      err => recordVisitorLocation(err.code === err.PERMISSION_DENIED ? 'denied' : 'unknown'),
+      { timeout: 10000 }
+    );
+  }
+  captureVisitorLocation();
 </script>
 
 </body>
