@@ -86,6 +86,8 @@ const AppVisitorSchema = new mongoose.Schema({
   ipProxy:     Boolean, // known VPN/proxy exit node
   ipHosting:   Boolean, // datacenter/cloud IP — most bots & crawlers run from these
   ipMobile:    Boolean, // carrier/mobile network IP
+  hadInteraction: Boolean, // any mouse/scroll/key/touch event fired this visit
+  dwellMs:        Number,  // ms page stayed open before hidden/closed
   visitCount:      { type: Number, default: 1 },
   createdDate:     { type: Date, default: Date.now },
   lastUpdatedDate: { type: Date, default: Date.now },
@@ -160,6 +162,182 @@ app.post('/api/visitor-location', visitLimiter, async (req, res) => {
   res.json({ success: true });
 });
 
+// Behavioral follow-up beacon — fires on tab hide/close via sendBeacon, once
+// the location beacon above has already created the visitor row. No IP
+// lookup here; just records whether the visit showed any human interaction
+// and how long the page stayed open. A clean IP (not hosting/proxy) only
+// means "not a lazy bot" — this catches scripted browsers on real IPs too.
+app.post('/api/visitor-behavior', visitLimiter, async (req, res) => {
+  const { visitorId, hadInteraction, dwellMs } = req.body;
+  if (!visitorId) return res.status(400).json({ success: false, error: 'visitorId is required' });
+
+  await AppVisitor.findOneAndUpdate(
+    { visitorId: String(visitorId).slice(0, 64) },
+    { $set: {
+        hadInteraction: !!hadInteraction,
+        dwellMs: Number.isFinite(dwellMs) ? Math.max(0, Math.min(dwellMs, 24 * 60 * 60 * 1000)) : undefined,
+        lastUpdatedDate: new Date()
+    } }
+  );
+  res.json({ success: true });
+});
+
+// ═══════════════════════════════════════════════════
+// Leads — "Start a Project" / "Request Callback" form submissions
+// ═══════════════════════════════════════════════════
+const LeadSchema = new mongoose.Schema({
+  source:          { type: String, enum: ['project-form', 'callback-form'], required: true },
+  name:            String,
+  email:           String,
+  company:         String,
+  budget:          String,
+  message:         String,
+  interests:       [String],
+  visitorId:       String,
+  createdDate:     { type: Date, default: Date.now },
+  lastUpdatedDate: { type: Date, default: Date.now },
+});
+const Lead = mongoose.model('Lead', LeadSchema);
+
+const leadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many submissions. Please try again later.' }
+});
+
+app.post('/api/leads', leadLimiter, async (req, res) => {
+  const { source, name, email, company, budget, message, interests, visitorId } = req.body;
+  if (!['project-form', 'callback-form'].includes(source) || !name || !email) {
+    return res.status(400).json({ success: false, error: 'name, email and source are required' });
+  }
+  await Lead.create({
+    source,
+    name: String(name).slice(0, 200),
+    email: String(email).slice(0, 200),
+    company: company ? String(company).slice(0, 200) : undefined,
+    budget: budget ? String(budget).slice(0, 100) : undefined,
+    message: message ? String(message).slice(0, 5000) : undefined,
+    interests: Array.isArray(interests) ? interests.map(i => String(i).slice(0, 50)).slice(0, 10) : undefined,
+    visitorId: visitorId ? String(visitorId).slice(0, 64) : undefined,
+  });
+  res.json({ success: true });
+});
+
+// ═══════════════════════════════════════════════════
+// Chat transcripts — one document per visitorId, appended to on every
+// /api/studio-chat exchange, so the admin can see what visitors asked.
+// ═══════════════════════════════════════════════════
+const ChatLogSchema = new mongoose.Schema({
+  visitorId:       { type: String, required: true, unique: true },
+  messages:        [{ role: String, content: String, at: { type: Date, default: Date.now } }],
+  createdDate:     { type: Date, default: Date.now },
+  lastUpdatedDate: { type: Date, default: Date.now },
+});
+const ChatLog = mongoose.model('ChatLog', ChatLogSchema);
+
+// ═══════════════════════════════════════════════════
+// Site chatbot — answers visitor questions about the studio
+// (services, past work, apps, team, how to get started).
+// OpenRouter free model first, falls back to Groq on 429 —
+// same pattern as ProChat's astrologer/health chat routes.
+// ═══════════════════════════════════════════════════
+const chatLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 40,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many messages. Please try again in a few minutes.' }
+});
+
+const STUDIO_SYSTEM_PROMPT = `You are the PinkisAppStudio website assistant — a friendly, concise guide for visitors on pinkisappstudio.space.
+
+About PinkisAppStudio:
+- A full-stack engineering studio (Bhopal / Remote) of 7 senior engineers building and running production apps for real businesses, end-to-end from idea to production.
+- Team: Madhavi Poranki (Tech Lead), Jahnavi Bomminayuni (Data Scientist), Hari Krishna Chowdhary (AI & ML Lead), Nitesh (Frontend), Sanidhya (Backend), Manish Pandey (Backend + DevOps), Mayank Thakur (App Developer). No juniors hidden on projects — clients work directly with senior engineers.
+
+Services: Mobile apps (Flutter, Swift, Kotlin, Java), Web platforms (React, Next.js, Tailwind), Backend & infrastructure (Node, Java, MongoDB), SEO & growth, API integrations (Meta, Google, Stripe), DevOps & cloud (AWS, CI/CD), Cloud migration (AWS/Azure/GCP), Database migration (MongoDB/MySQL/PostgreSQL), Testing (QA, security, load), Infrastructure maintenance.
+
+Process: 6 phases — Discover, Plan, Build (2-week sprints, weekly Friday demos), Test, Launch (phased rollout), Scale. Clients own their code and repo from day one, no lock-in.
+
+Sample work: KatyayaniVistar (AgriTech mobile app, 250+ product catalog, ₹25K+/mo revenue), MehadiMarket (Next.js home-essentials marketplace).
+
+Apps built & run by the studio (live products in the Apps Marketplace section):
+- ProTalk — professional networking platform with chat, calls, AI assistants
+- UrShop — multi-tenant shop platform for local businesses with live order tracking
+- Mehdis — custom stitching marketplace (upload design + measurements)
+- ILoveU — tap-to-share location utility app
+- VizagDocVisits — doctor home-visit booking platform
+- SriLaxmiENTClinic — clinic website for Sri Lakshmi ENT Hospital
+
+Modules: Business Directory (skilled labour/suppliers directory), CloudKitchen (homemaker food marketplace with scheduled dispatch).
+
+AI agents & models built internally: WhatsAppSalesAgent, DeploymentAgent, DataSeedAgent, Aria (cloned-voice AI companion in ProTalk), LeadGenCRM, MarketingAgent.
+
+Contact: pinkisstudiop@gmail.com, +91 99893 36847 (also WhatsApp), Bhopal / Remote. Response within one business day. Visitors can also use the "Start a Project" / "Request Callback" forms on this page.
+
+Answer visitor questions about services, the team, past work, the studio's own apps, and how to get started. There's no fixed public pricing — invite them to share their budget range via the contact form so the team can scope it. Keep replies short — 2-4 sentences, friendly and professional, no markdown formatting. If asked something unrelated to the studio's business, politely redirect to how the studio can help with a software project. If they want to start a project or get a quote, point them to the "Start a Project" form, WhatsApp button, or email above.`;
+
+app.post('/api/studio-chat', chatLimiter, async (req, res) => {
+  try {
+    const { message, history, visitorId } = req.body;
+    if (!message || typeof message !== 'string' || !message.trim()) {
+      return res.status(400).json({ success: false, error: 'No message' });
+    }
+
+    const messages = [
+      { role: 'system', content: STUDIO_SYSTEM_PROMPT },
+      ...(Array.isArray(history) ? history.slice(-10) : []),
+      { role: 'user', content: message.slice(0, 2000) }
+    ];
+
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}` },
+      body: JSON.stringify({ model: 'google/gemma-4-31b-it:free', messages, temperature: 0.5 }),
+    });
+
+    const data = await response.json();
+    let reply = data.choices?.[0]?.message?.content;
+    if (!reply) {
+      // OpenRouter's free pool gets rate-limited upstream (429) — retry on Groq
+      console.error('[StudioChat] OpenRouter error:', JSON.stringify(data));
+      const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.GROQ_API_KEY}` },
+        body: JSON.stringify({ model: 'openai/gpt-oss-120b', messages, temperature: 0.5 }),
+      });
+      const groqData = await groqRes.json();
+      reply = groqData.choices?.[0]?.message?.content;
+    }
+    if (!reply) {
+      return res.status(500).json({ success: false, error: 'Assistant did not respond' });
+    }
+
+    if (visitorId) {
+      const vid = String(visitorId).slice(0, 64);
+      await ChatLog.findOneAndUpdate(
+        { visitorId: vid },
+        {
+          $push: { messages: { $each: [
+            { role: 'user', content: message.slice(0, 2000) },
+            { role: 'assistant', content: reply }
+          ] } },
+          $set: { lastUpdatedDate: new Date() },
+          $setOnInsert: { createdDate: new Date() }
+        },
+        { upsert: true }
+      );
+    }
+
+    res.json({ success: true, reply });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: 'Chat service error' });
+  }
+});
+
 // ═══════════════════════════════════════════════════
 // Admin routes
 // ═══════════════════════════════════════════════════
@@ -179,13 +357,38 @@ app.get('/api/admin/visitors', adminAuth, async (req, res) => {
   const visitors = await AppVisitor.find().sort({ lastUpdatedDate: -1 }).limit(500).lean();
   const total = await AppVisitor.countDocuments();
   const bots  = await AppVisitor.countDocuments({ $or: [{ ipHosting: true }, { ipProxy: true }] });
-  res.json({ success: true, visitors, stats: { total, bots, real: total - bots } });
+  const noInteraction = await AppVisitor.countDocuments({ hadInteraction: false });
+  res.json({ success: true, visitors, stats: { total, bots, real: total - bots, noInteraction } });
 });
 
 app.delete('/api/admin/visitors', adminAuth, async (req, res) => {
   const { ids } = req.body;
   if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ success: false, error: 'ids required' });
   await AppVisitor.deleteMany({ _id: { $in: ids } });
+  res.json({ success: true });
+});
+
+app.get('/api/admin/leads', adminAuth, async (req, res) => {
+  const leads = await Lead.find().sort({ createdDate: -1 }).limit(500).lean();
+  res.json({ success: true, leads });
+});
+
+app.delete('/api/admin/leads', adminAuth, async (req, res) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ success: false, error: 'ids required' });
+  await Lead.deleteMany({ _id: { $in: ids } });
+  res.json({ success: true });
+});
+
+app.get('/api/admin/chats', adminAuth, async (req, res) => {
+  const chats = await ChatLog.find().sort({ lastUpdatedDate: -1 }).limit(200).lean();
+  res.json({ success: true, chats });
+});
+
+app.delete('/api/admin/chats', adminAuth, async (req, res) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ success: false, error: 'ids required' });
+  await ChatLog.deleteMany({ _id: { $in: ids } });
   res.json({ success: true });
 });
 

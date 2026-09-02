@@ -100,6 +100,7 @@
       <div class="stat-card"><div class="stat-label">Total Visitors</div><div class="stat-value" id="statTotal">0</div></div>
       <div class="stat-card real"><div class="stat-label">Likely Real</div><div class="stat-value" id="statReal">0</div></div>
       <div class="stat-card bots"><div class="stat-label">Likely Bots</div><div class="stat-value" id="statBots">0</div></div>
+      <div class="stat-card bots"><div class="stat-label">No Interaction</div><div class="stat-value" id="statNoInteraction">0</div></div>
     </div>
 
     <div class="members-section">
@@ -112,10 +113,44 @@
         <thead>
           <tr>
             <th><input type="checkbox" id="visitorsSelectAll" onchange="toggleAllVisitors(this.checked)"/></th>
-            <th>Last Seen</th><th>Visits</th><th>Approx. Location</th><th>ISP</th><th>IP</th><th>GPS</th><th>Type</th>
+            <th>Last Seen</th><th>Visits</th><th>Approx. Location</th><th>ISP</th><th>IP</th><th>GPS</th><th>Activity</th><th>Type</th>
           </tr>
         </thead>
-        <tbody id="visitorsBody"><tr class="empty-row"><td colspan="8">Loading…</td></tr></tbody>
+        <tbody id="visitorsBody"><tr class="empty-row"><td colspan="9">Loading…</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="members-section" style="margin-top:2rem">
+      <div class="members-header">
+        <h2>📝 Leads</h2>
+        <button class="login-btn" style="width:auto;padding:.45rem 1.2rem;font-size:.85rem" id="deleteLeadsBtn" onclick="deleteSelectedLeads()" disabled>🗑 Delete Selected</button>
+      </div>
+      <p style="color:#888;font-size:.8rem;margin:-4px 0 12px">Submissions from the "Start a Project" and "Request Callback" forms.</p>
+      <table>
+        <thead>
+          <tr>
+            <th><input type="checkbox" id="leadsSelectAll" onchange="toggleAllLeads(this.checked)"/></th>
+            <th>Date</th><th>Source</th><th>Name</th><th>Email</th><th>Company</th><th>Budget</th><th>Message</th><th>Interests</th>
+          </tr>
+        </thead>
+        <tbody id="leadsBody"><tr class="empty-row"><td colspan="9">Loading…</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="members-section" style="margin-top:2rem">
+      <div class="members-header">
+        <h2>💬 Chat Conversations</h2>
+        <button class="login-btn" style="width:auto;padding:.45rem 1.2rem;font-size:.85rem" id="deleteChatsBtn" onclick="deleteSelectedChats()" disabled>🗑 Delete Selected</button>
+      </div>
+      <p style="color:#888;font-size:.8rem;margin:-4px 0 12px">Conversations with the site chatbot. Click a message to expand the full transcript.</p>
+      <table>
+        <thead>
+          <tr>
+            <th><input type="checkbox" id="chatsSelectAll" onchange="toggleAllChats(this.checked)"/></th>
+            <th>Last Seen</th><th>Messages</th><th>Last Message</th>
+          </tr>
+        </thead>
+        <tbody id="chatsBody"><tr class="empty-row"><td colspan="4">Loading…</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -158,6 +193,12 @@ async function showDashboard() {
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('dashboard').style.display = 'block';
   await loadVisitors();
+  await loadLeads();
+  await loadChats();
+}
+
+function esc(s) {
+  return (s == null ? '' : String(s)).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
 async function apiFetch(url, method) {
@@ -172,20 +213,25 @@ async function loadVisitors() {
   document.getElementById('statTotal').textContent = data.stats.total;
   document.getElementById('statReal').textContent  = data.stats.real;
   document.getElementById('statBots').textContent  = data.stats.bots;
+  document.getElementById('statNoInteraction').textContent = data.stats.noInteraction;
 
   const body = document.getElementById('visitorsBody');
   if (!visitors.length) {
-    body.innerHTML = '<tr class="empty-row"><td colspan="8">No visitors yet.</td></tr>';
+    body.innerHTML = '<tr class="empty-row"><td colspan="9">No visitors yet.</td></tr>';
   } else {
     body.innerHTML = visitors.map(v => {
       const loc = v.ipCity ? [v.ipCity, v.ipRegion].filter(Boolean).join(', ') : '-';
       const gps = v.geoStatus === 'granted'
         ? `<a href="https://www.google.com/maps?q=${v.latitude},${v.longitude}" target="_blank" rel="noopener" style="color:#a78bfa">📍 View</a>`
         : v.geoStatus === 'denied' ? 'Denied' : '—';
+      const activity = v.hadInteraction === undefined ? '—'
+        : v.hadInteraction ? `👆 ${Math.round((v.dwellMs || 0) / 1000)}s`
+        : `<span style="color:#f87171">No interaction${v.dwellMs != null ? ' (' + Math.round(v.dwellMs / 1000) + 's)' : ''}</span>`;
       const type = v.ipHosting ? '<span class="badge badge-warn">🤖 Likely bot</span>'
         : v.ipProxy ? '<span class="badge badge-warn">🕵️ Proxy/VPN</span>'
+        : v.hadInteraction === false ? '<span class="badge badge-warn">⚠️ No interaction</span>'
         : '<span class="badge badge-online">👤 Real</span>';
-      return `<tr><td><input type="checkbox" class="visitorCheck" value="${v._id}" onchange="updateDeleteVisitorsBtn()"/></td><td>${new Date(v.lastUpdatedDate).toLocaleString('en-IN')}</td><td>${v.visitCount}</td><td>${loc}</td><td>${v.ipIsp || '-'}</td><td>${v.ipAddress || '-'}</td><td>${gps}</td><td>${type}</td></tr>`;
+      return `<tr><td><input type="checkbox" class="visitorCheck" value="${v._id}" onchange="updateDeleteVisitorsBtn()"/></td><td>${new Date(v.lastUpdatedDate).toLocaleString('en-IN')}</td><td>${v.visitCount}</td><td>${loc}</td><td>${v.ipIsp || '-'}</td><td>${v.ipAddress || '-'}</td><td>${gps}</td><td>${activity}</td><td>${type}</td></tr>`;
     }).join('');
   }
   document.getElementById('visitorsSelectAll').checked = false;
@@ -214,6 +260,111 @@ async function deleteSelectedVisitors() {
   const data = await res.json();
   if (data.success) loadVisitors();
   else alert('Failed to delete visitor records.');
+}
+
+async function loadLeads() {
+  const data = await apiFetch('/api/admin/leads');
+  if (!data.success) return;
+  const body = document.getElementById('leadsBody');
+  if (!data.leads.length) {
+    body.innerHTML = '<tr class="empty-row"><td colspan="9">No leads yet.</td></tr>';
+  } else {
+    body.innerHTML = data.leads.map(l => `<tr>
+      <td><input type="checkbox" class="leadCheck" value="${l._id}" onchange="updateDeleteLeadsBtn()"/></td>
+      <td>${new Date(l.createdDate).toLocaleString('en-IN')}</td>
+      <td>${l.source === 'callback-form' ? 'Callback' : 'Project'}</td>
+      <td>${esc(l.name) || '-'}</td>
+      <td>${l.email ? `<a href="mailto:${esc(l.email)}" style="color:#a78bfa">${esc(l.email)}</a>` : '-'}</td>
+      <td>${esc(l.company) || '-'}</td>
+      <td>${esc(l.budget) || '-'}</td>
+      <td style="max-width:220px;white-space:normal">${esc(l.message) || '-'}</td>
+      <td>${esc((l.interests || []).join(', ')) || '-'}</td>
+    </tr>`).join('');
+  }
+  document.getElementById('leadsSelectAll').checked = false;
+  updateDeleteLeadsBtn();
+}
+
+function toggleAllLeads(checked) {
+  document.querySelectorAll('.leadCheck').forEach(cb => cb.checked = checked);
+  updateDeleteLeadsBtn();
+}
+
+function updateDeleteLeadsBtn() {
+  document.getElementById('deleteLeadsBtn').disabled = document.querySelectorAll('.leadCheck:checked').length === 0;
+}
+
+async function deleteSelectedLeads() {
+  const ids = Array.from(document.querySelectorAll('.leadCheck:checked')).map(cb => cb.value);
+  if (!ids.length) return;
+  if (!confirm(`Delete ${ids.length} lead${ids.length === 1 ? '' : 's'}? This cannot be undone.`)) return;
+  const res = await fetch('/api/admin/leads', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + adminToken },
+    body: JSON.stringify({ ids }),
+  });
+  const data = await res.json();
+  if (data.success) loadLeads();
+  else alert('Failed to delete leads.');
+}
+
+let chatsData = [];
+
+async function loadChats() {
+  const data = await apiFetch('/api/admin/chats');
+  if (!data.success) return;
+  chatsData = data.chats;
+  const body = document.getElementById('chatsBody');
+  if (!chatsData.length) {
+    body.innerHTML = '<tr class="empty-row"><td colspan="4">No conversations yet.</td></tr>';
+  } else {
+    body.innerHTML = chatsData.map((c, i) => {
+      const last = c.messages[c.messages.length - 1];
+      const preview = esc((last?.content || '').slice(0, 80)) + ((last?.content || '').length > 80 ? '…' : '');
+      const transcript = c.messages.map(m =>
+        `<b style="color:${m.role === 'user' ? '#34d399' : '#a78bfa'}">${m.role === 'user' ? 'Visitor' : 'Bot'}:</b> ${esc(m.content)}`
+      ).join('<br><br>');
+      return `<tr>
+        <td><input type="checkbox" class="chatCheck" value="${c._id}" onchange="updateDeleteChatsBtn()"/></td>
+        <td>${new Date(c.lastUpdatedDate).toLocaleString('en-IN')}</td>
+        <td>${c.messages.length}</td>
+        <td style="max-width:320px;cursor:pointer;color:#a78bfa" onclick="toggleChatDetail(${i})">${preview} <span style="color:#666">(click to view)</span></td>
+      </tr>
+      <tr class="chat-detail-row" id="chatDetail${i}" style="display:none">
+        <td></td><td colspan="3" style="background:#12122a;padding:1rem;white-space:pre-wrap">${transcript}</td>
+      </tr>`;
+    }).join('');
+  }
+  document.getElementById('chatsSelectAll').checked = false;
+  updateDeleteChatsBtn();
+}
+
+function toggleChatDetail(i) {
+  const row = document.getElementById('chatDetail' + i);
+  row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
+}
+
+function toggleAllChats(checked) {
+  document.querySelectorAll('.chatCheck').forEach(cb => cb.checked = checked);
+  updateDeleteChatsBtn();
+}
+
+function updateDeleteChatsBtn() {
+  document.getElementById('deleteChatsBtn').disabled = document.querySelectorAll('.chatCheck:checked').length === 0;
+}
+
+async function deleteSelectedChats() {
+  const ids = Array.from(document.querySelectorAll('.chatCheck:checked')).map(cb => cb.value);
+  if (!ids.length) return;
+  if (!confirm(`Delete ${ids.length} conversation${ids.length === 1 ? '' : 's'}? This cannot be undone.`)) return;
+  const res = await fetch('/api/admin/chats', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + adminToken },
+    body: JSON.stringify({ ids }),
+  });
+  const data = await res.json();
+  if (data.success) loadChats();
+  else alert('Failed to delete conversations.');
 }
 
 if (adminToken) showDashboard();
