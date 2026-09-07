@@ -17,6 +17,7 @@
 // alongside step 1 instead of replacing it. (Real bug hit building this.)
 //
 // Usage:
+//   <script src="/qrcode.min.js"></script>   <!-- optional, adds a scannable QR code -->
 //   <script src="/manual-upi-widget.js"></script>
 //   <script>
 //     const payWidget = ManualUpiWidget.init({
@@ -29,6 +30,7 @@
 //       upiLinkId: 'payUpiLink',
 //       upiIdSpanId: 'payUpiId',
 //       upiAmountSpanId: 'payUpiAmount',
+//       qrContainerId: 'payUpiQr',   // optional — an empty <div>; skipped if qrcode.min.js isn't loaded
 //       doneMsgId: 'payDoneMsg',
 //       transactionNote: 'Project Payment',
 //       // Optional — customize what gets sent to /api/payments/submit.
@@ -44,12 +46,36 @@
 // submitUrl here to match a different prefix).
 
 (function (global) {
+  // Renders `text` as a QR code into `container` using the vendored
+  // qrcode-generator library (qrcode.min.js) — no external image API call,
+  // so nothing about the payee/amount ever leaves the page. Silently no-ops
+  // if that script wasn't loaded, so the QR code is an optional enhancement,
+  // not a hard dependency (the deep-link button still works without it).
+  function renderQr(container, text) {
+    if (!container || typeof global.qrcode !== 'function') return;
+    container.innerHTML = '';
+    // The library needs a fixed type (roughly, data capacity) picked up
+    // front — there's no auto-fit in this version, so grow it until the
+    // data fits rather than guessing a single size for every payload.
+    for (let typeNumber = 4; typeNumber <= 10; typeNumber++) {
+      try {
+        const qr = global.qrcode(typeNumber, 'M');
+        qr.addData(text);
+        qr.make();
+        container.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 4 });
+        return;
+      } catch (err) {
+        // too small for this typeNumber — try the next one
+      }
+    }
+  }
+
   function ManualUpiWidgetInit(config) {
     const {
       modalOverlayId, modalCloseId,
       detailsFormId, amountFieldName = 'amount',
       utrFormId, utrFieldName = 'utr',
-      upiLinkId, upiIdSpanId, upiAmountSpanId, doneMsgId,
+      upiLinkId, upiIdSpanId, upiAmountSpanId, qrContainerId, doneMsgId,
       upiInfoUrl = '/api/payments/upi-info',
       submitUrl = '/api/payments/submit',
       transactionNote = 'Payment',
@@ -114,12 +140,11 @@
 
       if (upiIdSpanId) document.getElementById(upiIdSpanId).textContent = info.upiId;
       if (upiAmountSpanId) document.getElementById(upiAmountSpanId).textContent = fields[amountFieldName] || '';
-      if (upiLinkId) {
-        // No `am` param — some UPI apps misparse a prefilled amount as an
-        // "exceeding limit" error; the visible amount text covers it instead.
-        document.getElementById(upiLinkId).href =
-          `upi://pay?pa=${encodeURIComponent(info.upiId)}&pn=${encodeURIComponent(info.upiName || '')}&tn=${encodeURIComponent(transactionNote)}`;
-      }
+      // No `am` param — some UPI apps misparse a prefilled amount as an
+      // "exceeding limit" error; the visible amount text covers it instead.
+      const upiUrl = `upi://pay?pa=${encodeURIComponent(info.upiId)}&pn=${encodeURIComponent(info.upiName || '')}&tn=${encodeURIComponent(transactionNote)}`;
+      if (upiLinkId) document.getElementById(upiLinkId).href = upiUrl;
+      if (qrContainerId) renderQr(document.getElementById(qrContainerId), upiUrl);
 
       detailsForm.hidden = true;
       utrForm.hidden = false;
