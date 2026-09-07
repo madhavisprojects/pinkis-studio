@@ -142,15 +142,15 @@
         <h2>💳 Payments</h2>
         <button class="login-btn" style="width:auto;padding:.45rem 1.2rem;font-size:.85rem" id="deletePaymentsBtn" onclick="deleteSelectedPayments()" disabled>🗑 Delete Selected</button>
       </div>
-      <p style="color:#888;font-size:.8rem;margin:-4px 0 12px">Historical "Pay for Your Project" payment records.</p>
+      <p style="color:#888;font-size:.8rem;margin:-4px 0 12px">"Pay for Your Project" payments — manual UPI + UTR, verify below.</p>
       <table>
         <thead>
           <tr>
             <th><input type="checkbox" id="paymentsSelectAll" onchange="toggleAllPayments(this.checked)"/></th>
-            <th>Date</th><th>Name</th><th>Email</th><th>Amount</th><th>Status</th><th>UTR</th><th>Transaction ID</th>
+            <th>Date</th><th>Name</th><th>Email</th><th>Amount</th><th>Status</th><th>UTR</th><th>Transaction ID</th><th>Action</th>
           </tr>
         </thead>
-        <tbody id="paymentsBody"><tr class="empty-row"><td colspan="8">Loading…</td></tr></tbody>
+        <tbody id="paymentsBody"><tr class="empty-row"><td colspan="9">Loading…</td></tr></tbody>
       </table>
     </div>
 
@@ -331,7 +331,7 @@ async function loadPayments() {
   if (!data.success) return;
   const body = document.getElementById('paymentsBody');
   if (!data.payments.length) {
-    body.innerHTML = '<tr class="empty-row"><td colspan="8">No payments yet.</td></tr>';
+    body.innerHTML = '<tr class="empty-row"><td colspan="9">No payments yet.</td></tr>';
   } else {
     body.innerHTML = data.payments.map(p => `<tr>
       <td><input type="checkbox" class="paymentCheck" value="${p._id}" onchange="updateDeletePaymentsBtn()"/></td>
@@ -339,9 +339,13 @@ async function loadPayments() {
       <td>${esc(p.name) || '-'}</td>
       <td>${p.email ? `<a href="mailto:${esc(p.email)}" style="color:#a78bfa">${esc(p.email)}</a>` : '-'}</td>
       <td>${esc(p.amount)} ${esc(p.currency)}</td>
-      <td><span class="badge badge-online">${esc(p.status) || 'completed'}</span></td>
+      <td><span class="badge ${p.status === 'completed' ? 'badge-online' : 'badge-offline'}">${esc(p.status) || 'completed'}</span></td>
       <td style="font-size:.75rem;color:#888">${esc(p.utr) || '-'}</td>
       <td style="font-size:.75rem;color:#888">${esc(p.transactionId)}</td>
+      <td>${p.status === 'pending' ? `
+        <button class="login-btn" style="width:auto;padding:.3rem .8rem;font-size:.75rem;margin-right:4px" onclick="approvePayment('${p._id}')">✅ Approve</button>
+        <button class="login-btn" style="width:auto;padding:.3rem .8rem;font-size:.75rem;background:#555" onclick="rejectPayment('${p._id}')">✕ Reject</button>
+      ` : '-'}</td>
     </tr>`).join('');
   }
   document.getElementById('paymentsSelectAll').checked = false;
@@ -351,6 +355,25 @@ async function loadPayments() {
 function toggleAllPayments(checked) {
   document.querySelectorAll('.paymentCheck').forEach(cb => cb.checked = checked);
   updateDeletePaymentsBtn();
+}
+
+async function approvePayment(id) {
+  const res = await fetch(`/api/admin/payments/${id}/approve`, {
+    method: 'POST', headers: { Authorization: 'Bearer ' + adminToken },
+  });
+  const data = await res.json();
+  if (data.success) loadPayments();
+  else alert('Failed to approve payment.');
+}
+
+async function rejectPayment(id) {
+  if (!confirm('Reject this payment?')) return;
+  const res = await fetch(`/api/admin/payments/${id}/reject`, {
+    method: 'POST', headers: { Authorization: 'Bearer ' + adminToken },
+  });
+  const data = await res.json();
+  if (data.success) loadPayments();
+  else alert('Failed to reject payment.');
 }
 
 function updateDeletePaymentsBtn() {

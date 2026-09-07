@@ -190,6 +190,7 @@
   .modal h3{font-size:20px; margin-bottom:6px; color:var(--navy);}
   .modal p{color:var(--muted); font-size:13px; margin-bottom:18px;}
   .modal form{grid-template-columns:1fr; margin-top:0;}
+  .modal form[hidden]{display:none;}
 
   @media(max-width:900px){
     .hero-grid{grid-template-columns:1fr;}
@@ -714,14 +715,24 @@
   <div class="modal">
     <button class="modal-close" id="payModalClose">✕</button>
     <h3>Pay for Your Project</h3>
-    <p>Enter the amount you were quoted (INR, via UPI). We'll follow up once payment is received.</p>
-    <form id="payForm">
+
+    <form id="payDetailsForm">
+      <p>Enter the amount you were quoted (INR, via UPI).</p>
       <div><label>Full Name</label><input type="text" name="name" placeholder="Full Name" required></div>
       <div><label>Email Address</label><input type="email" name="email" placeholder="Email Address" required></div>
       <div><label>Amount (₹)</label><input type="number" name="amount" placeholder="e.g. 500" min="1" step="0.01" required></div>
-      <div><button type="submit" class="btn btn-primary" id="payProceedBtn" style="width:100%; justify-content:center;">Proceed to Payment</button></div>
+      <div><button type="submit" class="btn btn-primary" style="width:100%; justify-content:center;">Continue to Pay</button></div>
+    </form>
+
+    <form id="payUtrForm" hidden>
+      <p><a id="payUpiLink" class="btn btn-outline" href="#" style="width:100%; justify-content:center; text-decoration:none;" target="_blank" rel="noopener">💳 Pay via UPI app</a></p>
+      <p style="color:var(--muted); font-size:13px; margin:10px 0;">UPI ID: <span id="payUpiId"></span>. Enter ₹<span id="payUpiAmount"></span> as the amount in your UPI app, then paste the UTR/reference number below.</p>
+      <div><label>UPI UTR / Reference Number</label><input type="text" name="utr" placeholder="e.g. 420987654321" required></div>
+      <div><button type="submit" class="btn btn-primary" id="payProceedBtn" style="width:100%; justify-content:center;">Submit Payment</button></div>
       <p id="payStatus" style="color:var(--muted); font-size:13px; margin-top:10px; min-height:1.2em;"></p>
     </form>
+
+    <p id="payDoneMsg" hidden style="color:var(--muted); font-size:14px;">Submitted — we verify payments manually, usually within a few hours. We'll follow up by email once confirmed.</p>
   </div>
 </div>
 
@@ -736,12 +747,16 @@
     if (e.target.id === 'modalOverlay') document.getElementById('modalOverlay').classList.remove('open');
   });
 
-  // Pay for Your Project — FamGateway (FamPay UPI) checkout
+  // Pay for Your Project — manual UPI deep link + UTR (verified manually in admin)
+  let payQuote = null; // { name, email, amount } from the first step
   document.getElementById('payProjectBtn').addEventListener('click', () => {
     const mainName = document.querySelector('#mainForm [name="name"]')?.value.trim();
     const mainEmail = document.querySelector('#mainForm [name="email"]')?.value.trim();
-    if (mainName) document.querySelector('#payForm [name="name"]').value = mainName;
-    if (mainEmail) document.querySelector('#payForm [name="email"]').value = mainEmail;
+    if (mainName) document.querySelector('#payDetailsForm [name="name"]').value = mainName;
+    if (mainEmail) document.querySelector('#payDetailsForm [name="email"]').value = mainEmail;
+    document.getElementById('payDetailsForm').hidden = false;
+    document.getElementById('payUtrForm').hidden = true;
+    document.getElementById('payDoneMsg').hidden = true;
     document.getElementById('payModalOverlay').classList.add('open');
   });
   document.getElementById('payModalClose').addEventListener('click', () => {
@@ -751,31 +766,46 @@
     if (e.target.id === 'payModalOverlay') document.getElementById('payModalOverlay').classList.remove('open');
   });
 
-  document.getElementById('payForm').addEventListener('submit', async function(e) {
+  document.getElementById('payDetailsForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const field = (n) => this.querySelector(`[name="${n}"]`)?.value.trim() || '';
+    payQuote = { name: field('name'), email: field('email'), amount: field('amount') };
+
+    const info = await fetch('/api/payments/upi-info').then(r => r.json()).catch(() => null);
+    if (!info?.upiId) return;
+
+    document.getElementById('payUpiId').textContent = info.upiId;
+    document.getElementById('payUpiAmount').textContent = payQuote.amount;
+    // No `am` param — some UPI apps misparse a prefilled amount as an
+    // "exceeding limit" error; the visible amount text above covers it.
+    document.getElementById('payUpiLink').href =
+      `upi://pay?pa=${encodeURIComponent(info.upiId)}&pn=${encodeURIComponent(info.upiName || 'PinkisAppStudio')}&tn=${encodeURIComponent('Project Payment')}`;
+
+    this.hidden = true;
+    document.getElementById('payUtrForm').hidden = false;
+  });
+
+  document.getElementById('payUtrForm').addEventListener('submit', async function(e) {
     e.preventDefault();
     const statusEl = document.getElementById('payStatus');
     const btn = document.getElementById('payProceedBtn');
-    const field = (n) => this.querySelector(`[name="${n}"]`)?.value.trim() || '';
+    const utr = this.querySelector('[name="utr"]').value.trim();
     btn.disabled = true;
-    statusEl.textContent = 'Creating payment…';
+    statusEl.textContent = 'Submitting…';
     try {
-      const res = await fetch('/api/famgateway/create-order', {
+      const res = await fetch('/api/payments/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: field('name'), email: field('email'), amount: field('amount'),
-          visitorId: getVisitorId(),
-        }),
+        body: JSON.stringify({ ...payQuote, utr, visitorId: getVisitorId() }),
       });
       const data = await res.json();
       if (!res.ok) {
-        statusEl.textContent = 'Could not start payment: ' + (data.error || res.status);
+        statusEl.textContent = 'Could not submit: ' + (data.error || res.status);
         btn.disabled = false;
         return;
       }
-      statusEl.textContent = '';
-      document.getElementById('payModalOverlay').classList.remove('open');
-      window.location.href = data.checkoutUrl;
+      this.hidden = true;
+      document.getElementById('payDoneMsg').hidden = false;
     } catch (err) {
       statusEl.textContent = 'Connection error — please try again.';
     } finally {
