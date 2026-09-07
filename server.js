@@ -7,6 +7,7 @@ const bcrypt         = require('bcryptjs');
 const jwt            = require('jsonwebtoken');
 const rateLimit       = require('express-rate-limit');
 const crypto          = require('crypto'); // used for generating payment reference IDs
+const { mountManualUpiKit } = require('./manual-upi-kit');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -64,30 +65,33 @@ app.use(express.static(__dirname));
 
 // ═══════════════════════════════════════════════════
 // Manual UPI payment — "Pay for Your Project" checkout
+// See manual-upi-kit.js for the reusable backend piece (same one ILoveU
+// will use) and manual-upi-widget.js for the matching frontend piece.
 // ═══════════════════════════════════════════════════
-app.get('/api/payments/upi-info', (req, res) => {
-  res.json({ upiId: ADMIN_UPI_ID, upiName: ADMIN_UPI_NAME });
-});
-
-app.post('/api/payments/submit', async (req, res) => {
-  const value = Number(req.body?.amount);
-  if (!Number.isFinite(value) || value < MIN_PAYMENT || value > MAX_PAYMENT) {
-    return res.status(400).json({ error: 'Invalid payment amount' });
-  }
-  const { utr } = req.body;
-  if (!utr || typeof utr !== 'string' || !utr.trim()) {
-    return res.status(400).json({ error: 'Payment UTR is required' });
-  }
-  const name = String(req.body?.name || '').slice(0, 200);
-  const email = String(req.body?.email || '').slice(0, 200);
-  const visitorId = req.body?.visitorId ? String(req.body.visitorId).slice(0, 64) : '';
-
-  const transactionId = 'proj_' + crypto.randomBytes(6).toString('hex');
-  await Payment.create({
-    transactionId, name, email, amount: value.toFixed(2), currency: 'INR',
-    status: 'pending', utr: utr.trim().slice(0, 40), visitorId
-  });
-  res.json({ success: true, message: 'Submitted — we verify payments manually, usually within a few hours.' });
+mountManualUpiKit(app, {
+  upiId: ADMIN_UPI_ID,
+  upiName: ADMIN_UPI_NAME,
+  adminAuth,
+  getAmount: async (req) => {
+    const value = Number(req.body?.amount);
+    return (!Number.isFinite(value) || value < MIN_PAYMENT || value > MAX_PAYMENT) ? NaN : value;
+  },
+  onSubmit: async (req, { amount, utr }) => {
+    const name = String(req.body?.name || '').slice(0, 200);
+    const email = String(req.body?.email || '').slice(0, 200);
+    const visitorId = req.body?.visitorId ? String(req.body.visitorId).slice(0, 64) : '';
+    const transactionId = 'proj_' + crypto.randomBytes(6).toString('hex');
+    await Payment.create({
+      transactionId, name, email, amount: amount.toFixed(2), currency: 'INR',
+      status: 'pending', utr, visitorId
+    });
+  },
+  onApprove: (req) => Payment.findByIdAndUpdate(
+    req.params.key, { status: 'completed', lastUpdatedDate: new Date() }, { new: true }
+  ),
+  onReject: (req) => Payment.findByIdAndUpdate(
+    req.params.key, { status: 'rejected', lastUpdatedDate: new Date() }, { new: true }
+  ),
 });
 
 // ═══════════════════════════════════════════════════
@@ -451,25 +455,8 @@ app.get('/api/admin/payments', adminAuth, async (req, res) => {
   res.json({ success: true, payments });
 });
 
-app.post('/api/admin/payments/:id/approve', adminAuth, async (req, res) => {
-  const payment = await Payment.findByIdAndUpdate(
-    req.params.id,
-    { status: 'completed', lastUpdatedDate: new Date() },
-    { new: true }
-  );
-  if (!payment) return res.status(404).json({ success: false, error: 'Payment not found' });
-  res.json({ success: true, payment });
-});
-
-app.post('/api/admin/payments/:id/reject', adminAuth, async (req, res) => {
-  const payment = await Payment.findByIdAndUpdate(
-    req.params.id,
-    { status: 'rejected', lastUpdatedDate: new Date() },
-    { new: true }
-  );
-  if (!payment) return res.status(404).json({ success: false, error: 'Payment not found' });
-  res.json({ success: true, payment });
-});
+// Approve/reject routes for /api/admin/payments/:key/approve|reject are
+// mounted by manual-upi-kit.js above.
 
 app.delete('/api/admin/payments', adminAuth, async (req, res) => {
   const { ids } = req.body;

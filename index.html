@@ -721,7 +721,8 @@
       <div><label>Full Name</label><input type="text" name="name" placeholder="Full Name" required></div>
       <div><label>Email Address</label><input type="email" name="email" placeholder="Email Address" required></div>
       <div><label>Amount (₹)</label><input type="number" name="amount" placeholder="e.g. 500" min="1" step="0.01" required></div>
-      <div><button type="submit" class="btn btn-primary" style="width:100%; justify-content:center;">Continue to Pay</button></div>
+      <div><button type="submit" class="btn btn-primary" id="payDetailsBtn" style="width:100%; justify-content:center;">Continue to Pay</button></div>
+      <p id="payDetailsStatus" class="manual-upi-status" style="color:var(--muted); font-size:13px; margin-top:10px; min-height:1.2em;"></p>
     </form>
 
     <form id="payUtrForm" hidden>
@@ -729,13 +730,14 @@
       <p style="color:var(--muted); font-size:13px; margin:10px 0;">UPI ID: <span id="payUpiId"></span>. Enter ₹<span id="payUpiAmount"></span> as the amount in your UPI app, then paste the UTR/reference number below.</p>
       <div><label>UPI UTR / Reference Number</label><input type="text" name="utr" placeholder="e.g. 420987654321" required></div>
       <div><button type="submit" class="btn btn-primary" id="payProceedBtn" style="width:100%; justify-content:center;">Submit Payment</button></div>
-      <p id="payStatus" style="color:var(--muted); font-size:13px; margin-top:10px; min-height:1.2em;"></p>
+      <p id="payStatus" class="manual-upi-status" style="color:var(--muted); font-size:13px; margin-top:10px; min-height:1.2em;"></p>
     </form>
 
     <p id="payDoneMsg" hidden style="color:var(--muted); font-size:14px;">Submitted — we verify payments manually, usually within a few hours. We'll follow up by email once confirmed.</p>
   </div>
 </div>
 
+<script src="/manual-upi-widget.js"></script>
 <script>
   document.getElementById('callbackTab').addEventListener('click', () => {
     document.getElementById('modalOverlay').classList.add('open');
@@ -748,69 +750,25 @@
   });
 
   // Pay for Your Project — manual UPI deep link + UTR (verified manually in admin)
-  let payQuote = null; // { name, email, amount } from the first step
+  const payWidget = ManualUpiWidget.init({
+    modalOverlayId: 'payModalOverlay',
+    modalCloseId: 'payModalClose',
+    detailsFormId: 'payDetailsForm',
+    amountFieldName: 'amount',
+    utrFormId: 'payUtrForm',
+    utrFieldName: 'utr',
+    upiLinkId: 'payUpiLink',
+    upiIdSpanId: 'payUpiId',
+    upiAmountSpanId: 'payUpiAmount',
+    doneMsgId: 'payDoneMsg',
+    transactionNote: 'Project Payment',
+    buildSubmitBody: (fields, utr) => ({ ...fields, utr, visitorId: getVisitorId() }),
+  });
   document.getElementById('payProjectBtn').addEventListener('click', () => {
-    const mainName = document.querySelector('#mainForm [name="name"]')?.value.trim();
-    const mainEmail = document.querySelector('#mainForm [name="email"]')?.value.trim();
-    if (mainName) document.querySelector('#payDetailsForm [name="name"]').value = mainName;
-    if (mainEmail) document.querySelector('#payDetailsForm [name="email"]').value = mainEmail;
-    document.getElementById('payDetailsForm').hidden = false;
-    document.getElementById('payUtrForm').hidden = true;
-    document.getElementById('payDoneMsg').hidden = true;
-    document.getElementById('payModalOverlay').classList.add('open');
-  });
-  document.getElementById('payModalClose').addEventListener('click', () => {
-    document.getElementById('payModalOverlay').classList.remove('open');
-  });
-  document.getElementById('payModalOverlay').addEventListener('click', (e) => {
-    if (e.target.id === 'payModalOverlay') document.getElementById('payModalOverlay').classList.remove('open');
-  });
-
-  document.getElementById('payDetailsForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    const field = (n) => this.querySelector(`[name="${n}"]`)?.value.trim() || '';
-    payQuote = { name: field('name'), email: field('email'), amount: field('amount') };
-
-    const info = await fetch('/api/payments/upi-info').then(r => r.json()).catch(() => null);
-    if (!info?.upiId) return;
-
-    document.getElementById('payUpiId').textContent = info.upiId;
-    document.getElementById('payUpiAmount').textContent = payQuote.amount;
-    // No `am` param — some UPI apps misparse a prefilled amount as an
-    // "exceeding limit" error; the visible amount text above covers it.
-    document.getElementById('payUpiLink').href =
-      `upi://pay?pa=${encodeURIComponent(info.upiId)}&pn=${encodeURIComponent(info.upiName || 'PinkisAppStudio')}&tn=${encodeURIComponent('Project Payment')}`;
-
-    this.hidden = true;
-    document.getElementById('payUtrForm').hidden = false;
-  });
-
-  document.getElementById('payUtrForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    const statusEl = document.getElementById('payStatus');
-    const btn = document.getElementById('payProceedBtn');
-    const utr = this.querySelector('[name="utr"]').value.trim();
-    btn.disabled = true;
-    statusEl.textContent = 'Submitting…';
-    try {
-      const res = await fetch('/api/payments/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...payQuote, utr, visitorId: getVisitorId() }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        statusEl.textContent = 'Could not submit: ' + (data.error || res.status);
-        btn.disabled = false;
-        return;
-      }
-      this.hidden = true;
-      document.getElementById('payDoneMsg').hidden = false;
-    } catch (err) {
-      statusEl.textContent = 'Connection error — please try again.';
-    } finally {
-      btn.disabled = false;
-    }
+    payWidget.open({
+      name: document.querySelector('#mainForm [name="name"]')?.value.trim(),
+      email: document.querySelector('#mainForm [name="email"]')?.value.trim(),
+    });
   });
 
   function handleSubmit(form, isCallback){
