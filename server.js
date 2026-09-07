@@ -6,6 +6,7 @@ const mongoose      = require('mongoose');
 const bcrypt         = require('bcryptjs');
 const jwt            = require('jsonwebtoken');
 const rateLimit       = require('express-rate-limit');
+const crypto          = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -20,9 +21,104 @@ mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('✅  MongoDB connected'))
   .catch(err => console.error('❌  MongoDB connection failed:', err.message));
 
+// ═══════════════════════════════════════════════════
+// Payments — "Pay for Your Project" button beside "Book Strategy Call".
+// Clients pay whatever amount they were quoted for their project, so
+// (unlike a fixed-price product) trusting the client-submitted amount here
+// is fine — there's nothing fixed-value to under-pay for; the studio just
+// follows up on whatever comes in. Runs through FamGateway (FamPay UPI),
+// which auto-verifies via a signed webhook once the bank credit lands.
+// ═══════════════════════════════════════════════════
+const PaymentSchema = new mongoose.Schema({
+  transactionId:   { type: String, required: true, unique: true }, // FamGateway order_id
+  name:            String,
+  email:           String,
+  amount:          String,
+  currency:        String,
+  status:          String,
+  utr:             String,
+  visitorId:       String,
+  createdDate:     { type: Date, default: Date.now },
+  lastUpdatedDate: { type: Date, default: Date.now },
+});
+const Payment = mongoose.model('Payment', PaymentSchema);
+
+const FAMGATEWAY_API_KEY = process.env.FAMGATEWAY_API_KEY || '';
+const MIN_PAYMENT = 1;
+const MAX_PAYMENT = 100000; // sanity ceiling — a mistyped amount shouldn't try to charge millions
+
 app.use(cors());
-app.use(express.json());
+// `verify` stashes the raw body buffer for FamGateway's HMAC-SHA256 webhook
+// signature check, which must hash the exact bytes received, not a re-serialized copy.
+app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf; } }));
+// express.static(__dirname) below serves the whole app directory, so without
+// this guard .git/, .env, .ebextensions/ etc. are all publicly downloadable —
+// confirmed exploitable in production (scanners were pulling .git/config,
+// .git/HEAD and .git/logs/HEAD with real content, not a 404).
+app.use((req, res, next) => {
+  if (req.path.split('/').some(seg => seg.length > 1 && seg[0] === '.')) {
+    return res.status(404).end();
+  }
+  next();
+});
 app.use(express.static(__dirname));
+
+// ═══════════════════════════════════════════════════
+// FamGateway (FamPay UPI) — "Pay for Your Project" checkout
+// ═══════════════════════════════════════════════════
+app.post('/api/famgateway/create-order', async (req, res) => {
+  if (!FAMGATEWAY_API_KEY) return res.status(503).json({ error: 'Payments are not configured' });
+
+  const value = Number(req.body?.amount);
+  if (!Number.isFinite(value) || value < MIN_PAYMENT || value > MAX_PAYMENT) {
+    return res.status(400).json({ error: 'Invalid payment amount' });
+  }
+  const name = String(req.body?.name || '').slice(0, 200);
+  const email = String(req.body?.email || '').slice(0, 200);
+  const visitorId = req.body?.visitorId ? String(req.body.visitorId).slice(0, 64) : '';
+
+  const params = new URLSearchParams({
+    api_key: FAMGATEWAY_API_KEY,
+    amount: value.toFixed(2),
+    customer_name: name || 'PinkisAppStudio Client',
+    customer_email: email
+  });
+  try {
+    const r = await fetch(`https://famgateway.in/api/qr.php?${params}`);
+    const data = await r.json();
+    if (data.status !== 'success') return res.status(502).json({ error: 'Could not create payment order' });
+
+    await Payment.create({
+      transactionId: data.data.order_id,
+      name, email, amount: value.toFixed(2), currency: 'INR', status: 'pending', visitorId
+    });
+    res.json({ success: true, orderId: data.data.order_id, checkoutUrl: data.data.checkout_url, qrUrl: data.data.qr_url });
+  } catch (err) {
+    console.error('FamGateway order creation failed:', err.message);
+    res.status(502).json({ error: 'Could not create payment order' });
+  }
+});
+
+// FamGateway calls this the instant it verifies a bank-credit email.
+app.post('/api/famgateway-webhook', async (req, res) => {
+  if (!FAMGATEWAY_API_KEY) return res.status(503).end();
+
+  const signature = req.headers['x-famgateway-signature'];
+  const expected = crypto.createHmac('sha256', FAMGATEWAY_API_KEY).update(req.rawBody).digest('hex');
+  if (!signature || signature.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+    return res.status(401).json({ error: 'Invalid signature' });
+  }
+
+  const { event, status, order_id, utr, sender_name } = req.body;
+  if (event === 'payment.success' || status === 'success') {
+    await Payment.findOneAndUpdate(
+      { transactionId: order_id },
+      { $set: { status: 'completed', utr: utr || '', lastUpdatedDate: new Date() } }
+    );
+    console.log(`✅ FamGateway payment completed: ${order_id} (UTR: ${utr}) from ${sender_name || 'unknown'}`);
+  }
+  res.status(200).json({ status: 'received' });
+});
 
 // ═══════════════════════════════════════════════════
 // Admin (platform login)
@@ -377,6 +473,18 @@ app.delete('/api/admin/leads', adminAuth, async (req, res) => {
   const { ids } = req.body;
   if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ success: false, error: 'ids required' });
   await Lead.deleteMany({ _id: { $in: ids } });
+  res.json({ success: true });
+});
+
+app.get('/api/admin/payments', adminAuth, async (req, res) => {
+  const payments = await Payment.find().sort({ createdDate: -1 }).limit(500).lean();
+  res.json({ success: true, payments });
+});
+
+app.delete('/api/admin/payments', adminAuth, async (req, res) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ success: false, error: 'ids required' });
+  await Payment.deleteMany({ _id: { $in: ids } });
   res.json({ success: true });
 });
 

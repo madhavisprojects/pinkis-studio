@@ -139,6 +139,23 @@
 
     <div class="members-section" style="margin-top:2rem">
       <div class="members-header">
+        <h2>💳 Payments</h2>
+        <button class="login-btn" style="width:auto;padding:.45rem 1.2rem;font-size:.85rem" id="deletePaymentsBtn" onclick="deleteSelectedPayments()" disabled>🗑 Delete Selected</button>
+      </div>
+      <p style="color:#888;font-size:.8rem;margin:-4px 0 12px">Historical "Pay for Your Project" payment records.</p>
+      <table>
+        <thead>
+          <tr>
+            <th><input type="checkbox" id="paymentsSelectAll" onchange="toggleAllPayments(this.checked)"/></th>
+            <th>Date</th><th>Name</th><th>Email</th><th>Amount</th><th>Status</th><th>UTR</th><th>Transaction ID</th>
+          </tr>
+        </thead>
+        <tbody id="paymentsBody"><tr class="empty-row"><td colspan="8">Loading…</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="members-section" style="margin-top:2rem">
+      <div class="members-header">
         <h2>💬 Chat Conversations</h2>
         <button class="login-btn" style="width:auto;padding:.45rem 1.2rem;font-size:.85rem" id="deleteChatsBtn" onclick="deleteSelectedChats()" disabled>🗑 Delete Selected</button>
       </div>
@@ -194,6 +211,7 @@ async function showDashboard() {
   document.getElementById('dashboard').style.display = 'block';
   await loadVisitors();
   await loadLeads();
+  await loadPayments();
   await loadChats();
 }
 
@@ -306,6 +324,51 @@ async function deleteSelectedLeads() {
   const data = await res.json();
   if (data.success) loadLeads();
   else alert('Failed to delete leads.');
+}
+
+async function loadPayments() {
+  const data = await apiFetch('/api/admin/payments');
+  if (!data.success) return;
+  const body = document.getElementById('paymentsBody');
+  if (!data.payments.length) {
+    body.innerHTML = '<tr class="empty-row"><td colspan="8">No payments yet.</td></tr>';
+  } else {
+    body.innerHTML = data.payments.map(p => `<tr>
+      <td><input type="checkbox" class="paymentCheck" value="${p._id}" onchange="updateDeletePaymentsBtn()"/></td>
+      <td>${new Date(p.createdDate).toLocaleString('en-IN')}</td>
+      <td>${esc(p.name) || '-'}</td>
+      <td>${p.email ? `<a href="mailto:${esc(p.email)}" style="color:#a78bfa">${esc(p.email)}</a>` : '-'}</td>
+      <td>${esc(p.amount)} ${esc(p.currency)}</td>
+      <td><span class="badge badge-online">${esc(p.status) || 'completed'}</span></td>
+      <td style="font-size:.75rem;color:#888">${esc(p.utr) || '-'}</td>
+      <td style="font-size:.75rem;color:#888">${esc(p.transactionId)}</td>
+    </tr>`).join('');
+  }
+  document.getElementById('paymentsSelectAll').checked = false;
+  updateDeletePaymentsBtn();
+}
+
+function toggleAllPayments(checked) {
+  document.querySelectorAll('.paymentCheck').forEach(cb => cb.checked = checked);
+  updateDeletePaymentsBtn();
+}
+
+function updateDeletePaymentsBtn() {
+  document.getElementById('deletePaymentsBtn').disabled = document.querySelectorAll('.paymentCheck:checked').length === 0;
+}
+
+async function deleteSelectedPayments() {
+  const ids = Array.from(document.querySelectorAll('.paymentCheck:checked')).map(cb => cb.value);
+  if (!ids.length) return;
+  if (!confirm(`Delete ${ids.length} payment record${ids.length === 1 ? '' : 's'}? This cannot be undone.`)) return;
+  const res = await fetch('/api/admin/payments', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + adminToken },
+    body: JSON.stringify({ ids }),
+  });
+  const data = await res.json();
+  if (data.success) loadPayments();
+  else alert('Failed to delete payment records.');
 }
 
 let chatsData = [];

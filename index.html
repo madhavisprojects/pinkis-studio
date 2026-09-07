@@ -604,7 +604,10 @@
           <label><input type="checkbox"> Analytics</label>
         </div>
       </div>
-      <div class="full"><button type="submit" class="btn btn-primary">Book Strategy Call</button></div>
+      <div class="full" style="display:flex; gap:14px; flex-wrap:wrap;">
+        <button type="submit" class="btn btn-primary">Book Strategy Call</button>
+        <button type="button" class="btn btn-outline" id="payProjectBtn">💳 Pay for Your Project</button>
+      </div>
     </form>
   </div>
 </section>
@@ -707,6 +710,21 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="payModalOverlay">
+  <div class="modal">
+    <button class="modal-close" id="payModalClose">✕</button>
+    <h3>Pay for Your Project</h3>
+    <p>Enter the amount you were quoted (INR, via UPI). We'll follow up once payment is received.</p>
+    <form id="payForm">
+      <div><label>Full Name</label><input type="text" name="name" placeholder="Full Name" required></div>
+      <div><label>Email Address</label><input type="email" name="email" placeholder="Email Address" required></div>
+      <div><label>Amount (₹)</label><input type="number" name="amount" placeholder="e.g. 500" min="1" step="0.01" required></div>
+      <div><button type="submit" class="btn btn-primary" id="payProceedBtn" style="width:100%; justify-content:center;">Proceed to Payment</button></div>
+      <p id="payStatus" style="color:var(--muted); font-size:13px; margin-top:10px; min-height:1.2em;"></p>
+    </form>
+  </div>
+</div>
+
 <script>
   document.getElementById('callbackTab').addEventListener('click', () => {
     document.getElementById('modalOverlay').classList.add('open');
@@ -716,6 +734,53 @@
   });
   document.getElementById('modalOverlay').addEventListener('click', (e) => {
     if (e.target.id === 'modalOverlay') document.getElementById('modalOverlay').classList.remove('open');
+  });
+
+  // Pay for Your Project — FamGateway (FamPay UPI) checkout
+  document.getElementById('payProjectBtn').addEventListener('click', () => {
+    const mainName = document.querySelector('#mainForm [name="name"]')?.value.trim();
+    const mainEmail = document.querySelector('#mainForm [name="email"]')?.value.trim();
+    if (mainName) document.querySelector('#payForm [name="name"]').value = mainName;
+    if (mainEmail) document.querySelector('#payForm [name="email"]').value = mainEmail;
+    document.getElementById('payModalOverlay').classList.add('open');
+  });
+  document.getElementById('payModalClose').addEventListener('click', () => {
+    document.getElementById('payModalOverlay').classList.remove('open');
+  });
+  document.getElementById('payModalOverlay').addEventListener('click', (e) => {
+    if (e.target.id === 'payModalOverlay') document.getElementById('payModalOverlay').classList.remove('open');
+  });
+
+  document.getElementById('payForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const statusEl = document.getElementById('payStatus');
+    const btn = document.getElementById('payProceedBtn');
+    const field = (n) => this.querySelector(`[name="${n}"]`)?.value.trim() || '';
+    btn.disabled = true;
+    statusEl.textContent = 'Creating payment…';
+    try {
+      const res = await fetch('/api/famgateway/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: field('name'), email: field('email'), amount: field('amount'),
+          visitorId: getVisitorId(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        statusEl.textContent = 'Could not start payment: ' + (data.error || res.status);
+        btn.disabled = false;
+        return;
+      }
+      statusEl.textContent = '';
+      document.getElementById('payModalOverlay').classList.remove('open');
+      window.location.href = data.checkoutUrl;
+    } catch (err) {
+      statusEl.textContent = 'Connection error — please try again.';
+    } finally {
+      btn.disabled = false;
+    }
   });
 
   function handleSubmit(form, isCallback){
