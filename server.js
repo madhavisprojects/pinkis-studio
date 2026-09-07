@@ -61,7 +61,17 @@ app.use((req, res, next) => {
   }
   next();
 });
-app.use(express.static(__dirname));
+// no-cache (not no-store) on HTML/JS/CSS: browsers still keep a copy but must
+// revalidate with the server (via ETag, cheap 304s) before using it, so a
+// deploy takes effect on the visitor's very next page load instead of being
+// silently masked by Cloudflare's default 4hr browser-cache TTL for static files.
+app.use(express.static(__dirname, {
+  setHeaders: (res, filePath) => {
+    if (/\.(html|js|css)$/.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-cache');
+    }
+  }
+}));
 
 // ═══════════════════════════════════════════════════
 // Manual UPI payment — "Pay for Your Project" checkout
