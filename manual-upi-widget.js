@@ -31,6 +31,7 @@
 //       upiIdSpanId: 'payUpiId',
 //       upiAmountSpanId: 'payUpiAmount',
 //       qrContainerId: 'payUpiQr',   // optional — an empty <div>; skipped if qrcode.min.js isn't loaded
+//       desktopHintId: 'payUpiDesktopHint',   // optional — starts `hidden`, shown on non-mobile UAs
 //       doneMsgId: 'payDoneMsg',
 //       transactionNote: 'Project Payment',
 //       // Optional — customize what gets sent to /api/payments/submit.
@@ -75,7 +76,7 @@
       modalOverlayId, modalCloseId,
       detailsFormId, amountFieldName = 'amount',
       utrFormId, utrFieldName = 'utr',
-      upiLinkId, upiIdSpanId, upiAmountSpanId, qrContainerId, doneMsgId,
+      upiLinkId, upiIdSpanId, upiAmountSpanId, qrContainerId, desktopHintId, doneMsgId,
       upiInfoUrl = '/api/payments/upi-info',
       submitUrl = '/api/payments/submit',
       transactionNote = 'Payment',
@@ -145,6 +146,12 @@
       const upiUrl = `upi://pay?pa=${encodeURIComponent(info.upiId)}&pn=${encodeURIComponent(info.upiName || '')}&tn=${encodeURIComponent(transactionNote)}`;
       if (upiLinkId) document.getElementById(upiLinkId).href = upiUrl;
       if (qrContainerId) renderQr(document.getElementById(qrContainerId), upiUrl);
+      // upi:// only does anything on a phone with a UPI app installed — on
+      // desktop the click is a silent no-op, so point people at the QR code.
+      if (desktopHintId) {
+        const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        document.getElementById(desktopHintId).hidden = isMobile;
+      }
 
       detailsForm.hidden = true;
       utrForm.hidden = false;
