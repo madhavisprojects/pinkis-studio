@@ -245,7 +245,7 @@ async function loadVisitors() {
       const activity = v.hadInteraction === undefined ? '—'
         : v.hadInteraction ? `👆 ${Math.round((v.dwellMs || 0) / 1000)}s`
         : `<span style="color:#f87171">No interaction${v.dwellMs != null ? ' (' + Math.round(v.dwellMs / 1000) + 's)' : ''}</span>`;
-      const type = v.ipHosting ? '<span class="badge badge-warn">🤖 Likely bot</span>'
+      const type = (v.ipHosting || v.uaBot) ? '<span class="badge badge-warn">🤖 Likely bot</span>'
         : v.ipProxy ? '<span class="badge badge-warn">🕵️ Proxy/VPN</span>'
         : v.hadInteraction === false ? '<span class="badge badge-warn">⚠️ No interaction</span>'
         : '<span class="badge badge-online">👤 Real</span>';

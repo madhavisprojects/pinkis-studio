@@ -166,6 +166,7 @@ const AppVisitorSchema = new mongoose.Schema({
   ipProxy:     Boolean, // known VPN/proxy exit node
   ipHosting:   Boolean, // datacenter/cloud IP — most bots & crawlers run from these
   ipMobile:    Boolean, // carrier/mobile network IP
+  uaBot:       Boolean, // User-Agent matched a known bot/crawler/scanner pattern
   hadInteraction: Boolean, // any mouse/scroll/key/touch event fired this visit
   dwellMs:        Number,  // ms page stayed open before hidden/closed
   visitCount:      { type: Number, default: 1 },
@@ -191,6 +192,15 @@ async function lookupIpLocation(ip) {
     console.error('IP lookup failed:', err.message);
     return null;
   }
+}
+
+// Real browsers never send an empty UA or self-identify as a bot/crawler/scanner --
+// catches things like "RadixAbuseResearch/1.0" that IP-hosting/proxy checks miss
+// because they run from ordinary residential/mobile IPs.
+const BOT_UA_PATTERN = /\bbot\b|crawler|spider|scraper|slurp|research|scan(ner)?|monitor|uptimerobot|pingdom|curl\/|wget\/|python-requests|python-urllib|go-http-client|okhttp|libwww-perl|apache-httpclient|headlesschrome|phantomjs|selenium|puppeteer|facebookexternalhit|bingpreview|ahrefsbot|semrushbot|mj12bot|dotbot|petalbot|bytespider|censys|shodan|masscan|nmap|zgrab|nuclei|netcraft/i;
+function isBotUserAgent(ua) {
+  if (!ua) return true;
+  return BOT_UA_PATTERN.test(ua);
 }
 
 const loginLimiter = rateLimit({
@@ -232,6 +242,7 @@ app.post('/api/visitor-location', visitLimiter, async (req, res) => {
         ipCity: ipLocation?.ipCity, ipRegion: ipLocation?.ipRegion,
         ipCountry: ipLocation?.ipCountry, ipIsp: ipLocation?.ipIsp,
         ipProxy: ipLocation?.ipProxy, ipHosting: ipLocation?.ipHosting, ipMobile: ipLocation?.ipMobile,
+        uaBot: isBotUserAgent(req.headers['user-agent']),
         lastUpdatedDate: new Date()
       },
       $inc: { visitCount: 1 },
@@ -436,7 +447,7 @@ app.post('/api/admin/login', loginLimiter, async (req, res) => {
 app.get('/api/admin/visitors', adminAuth, async (req, res) => {
   const visitors = await AppVisitor.find().sort({ lastUpdatedDate: -1 }).limit(500).lean();
   const total = await AppVisitor.countDocuments();
-  const bots  = await AppVisitor.countDocuments({ $or: [{ ipHosting: true }, { ipProxy: true }] });
+  const bots  = await AppVisitor.countDocuments({ $or: [{ ipHosting: true }, { ipProxy: true }, { uaBot: true }] });
   const noInteraction = await AppVisitor.countDocuments({ hadInteraction: false });
   res.json({ success: true, visitors, stats: { total, bots, real: total - bots, noInteraction } });
 });
