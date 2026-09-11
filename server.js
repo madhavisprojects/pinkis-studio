@@ -8,6 +8,7 @@ const jwt            = require('jsonwebtoken');
 const rateLimit       = require('express-rate-limit');
 const crypto          = require('crypto'); // used for generating payment reference IDs
 const { mountManualUpiKit } = require('./manual-upi-kit');
+const getClientIp = require('./website-visitors');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -224,8 +225,7 @@ app.post('/api/visitor-location', visitLimiter, async (req, res) => {
   const { visitorId, geoStatus, lat, lng, accuracy } = req.body;
   if (!visitorId) return res.status(400).json({ success: false, error: 'visitorId is required' });
 
-  const forwardedFor = req.headers['x-forwarded-for'];
-  const ipAddress = forwardedFor ? forwardedFor.split(',')[0].trim() : req.ip;
+  const ipAddress = getClientIp(req);
   const ipLocation = await lookupIpLocation(ipAddress);
   const status = geoStatus === 'granted' || geoStatus === 'denied' ? geoStatus : 'unknown';
 
