@@ -187,5 +187,9 @@
     return { open, close };
   }
 
-  global.ManualUpiWidget = { init: ManualUpiWidgetInit };
+  // Exposed standalone for apps whose payment UI isn't the two-step modal
+  // above (e.g. a single locked/pending/active section with a fixed
+  // amount, like ILoveU Premium) — just call ManualUpiWidget.renderQr(
+  // container, upiUrl) directly wherever the UPI link gets built.
+  global.ManualUpiWidget = { init: ManualUpiWidgetInit, renderQr };
 })(window);
