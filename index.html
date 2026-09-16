@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PinkisAppStudio — Full-Stack Engineering Studio Bhopal | Scalable Digital Solutions</title>
+<title>Build AI Apps with PinkisAppStudio</title>
 <meta name="description" content="PinkisAppStudio is a full-stack app development studio in Bhopal building mobile apps, web platforms and backend systems for real businesses — from idea to production.">
 <link rel="canonical" href="https://pinkisappstudio.space/">
 
-<meta property="og:title" content="PinkisAppStudio — Full-Stack Engineering Studio Bhopal">
+<meta property="og:title" content="Build AI Apps with PinkisAppStudio">
 <meta property="og:description" content="Full-stack app development studio in Bhopal building mobile apps, web platforms and backend systems for real businesses — from idea to production.">
 <meta property="og:image" content="https://pinkisappstudio.space/assets/logo.svg">
 <meta property="og:url" content="https://pinkisappstudio.space/">
@@ -233,7 +233,8 @@
       <a href="#work">Work</a>
       <a href="#marketplace">Apps</a>
       <a href="#modules">Modules</a>
-      <a href="#agents">Agents &amp; Models</a>
+      <a href="#agents">Agents</a>
+      <a href="#models">Models</a>
       <a href="#process">Process</a>
       <a href="#team">Team</a>
       <a href="#contact" class="btn btn-primary nav-cta">Start a Project →</a>
@@ -253,7 +254,7 @@
     </div>
     <div class="hero-card">
       <div class="top"><span>ACTIVE TEAM</span><span>7 ENGINEERS</span></div>
-      <div class="row"><span class="name">Madhavi Poranki</span><span class="role">Tech Lead</span></div>
+      <div class="row"><span class="name" id="madhaviNameTrigger" style="cursor:pointer; text-decoration:underline; text-decoration-style:dotted; text-underline-offset:3px;">Madhavi Poranki</span><span class="role">Tech Lead</span></div>
       <div class="row"><span class="name">Jahnavi Bomminayuni</span><span class="role">Data Scientist</span></div>
       <div class="row"><span class="name">Hari Krishna Chowdhary</span><span class="role">AI &amp; ML Lead</span></div>
       <div class="row"><span class="name">Nitesh</span><span class="role">Frontend</span></div>
@@ -425,18 +426,6 @@
         <p>Clinic website for Sri Lakshmi ENT Hospital, with location, services and doctor details.</p>
         <a class="btn btn-outline" href="https://srilaxmientclinic.pinkisappstudio.space" target="_blank" rel="noopener">Visit App →</a>
       </div>
-    </div>
-  </div>
-</section>
-
-<section id="modules" class="alt">
-  <div class="wrap">
-    <span class="eyebrow">Modules</span>
-    <div class="section-head">
-      <h2>Focused tools we build <span class="hl">on top of</span> our core products.</h2>
-      <p class="section-sub">Smaller, single-purpose modules — built fast, run lean.</p>
-    </div>
-    <div class="apps-grid">
       <div class="app-card">
         <span class="case-label">Services / Directory</span>
         <h3>Business Directory</h3>
@@ -453,9 +442,36 @@
   </div>
 </section>
 
+<section id="modules" class="alt">
+  <div class="wrap">
+    <span class="eyebrow">Modules</span>
+    <div class="section-head">
+      <h2>Shared infrastructure <span class="hl">built once</span>, reused everywhere.</h2>
+      <p class="section-sub">Cross-cutting modules dropped into every app we run, not rebuilt per project.</p>
+    </div>
+    <div class="apps-grid">
+      <div class="app-card">
+        <span class="case-label">Internal Module — Analytics</span>
+        <h3>Website Visitors</h3>
+        <p>Client-IP resolution and visitor tracking, reused as-is across every app instead of rewriting IP-detection logic each time.</p>
+      </div>
+      <div class="app-card">
+        <span class="case-label">Internal Module — Payments</span>
+        <h3>Payment Gateway</h3>
+        <p>Manual UPI deep-link and QR flow with UTR verification, used in place of Stripe or Razorpay across our subscription products.</p>
+      </div>
+      <div class="app-card">
+        <span class="case-label">Internal Module — Billing</span>
+        <h3>Subscription Kit</h3>
+        <p>Monthly renewal and billing flow for member subscriptions, copy-pasted per app and adapted to each product's own login rules.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section id="agents">
   <div class="wrap">
-    <span class="eyebrow">Agents &amp; Models</span>
+    <span class="eyebrow">Agents</span>
     <div class="section-head">
       <h2>AI agents we've <span class="hl">built and run</span> internally.</h2>
       <p class="section-sub">Automation agents used to power sales, support and operations across our own products.</p>
@@ -477,11 +493,6 @@
         <p>Loads realistic demo data — test profiles, shop categories, product catalogs with images — into our apps through their own APIs, for QA runs and client demos.</p>
       </div>
       <div class="app-card">
-        <span class="case-label">AI Model — Voice Companion</span>
-        <h3>Aria</h3>
-        <p>Hands-free cloned-voice AI companion inside ProTalk — replies in a member's own cloned voice when available, powered by real-time speech-to-text.</p>
-      </div>
-      <div class="app-card">
         <span class="case-label">AI Agent — Internal Tool</span>
         <h3>LeadGenCRM</h3>
         <p>Finds and AI-scores local businesses from Google Places as onboarding leads for UrShop, with a CRM view to track outreach status.</p>
@@ -495,6 +506,39 @@
         <span class="case-label">AI Agent — SEO</span>
         <h3>AI Sales Agent</h3>
         <p>Takes a site's URL and its owner's Gmail, then generates a ready-to-ship robots.txt, sitemap.xml and meta tag block — and tracks which Google account owns which domain for Search Console.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="models" class="alt">
+  <div class="wrap">
+    <span class="eyebrow">Models</span>
+    <div class="section-head">
+      <h2>AI models <span class="hl">woven into</span> our products.</h2>
+      <p class="section-sub">Voice and language models running live inside our apps, not just internal tooling.</p>
+    </div>
+    <div class="apps-grid">
+      <div class="app-card">
+        <span class="case-label">AI Model — Voice Companion</span>
+        <h3>Aria</h3>
+        <p>Hands-free cloned-voice AI companion inside ProTalk — replies in a member's own cloned voice when available, powered by real-time speech-to-text.</p>
+      </div>
+      <div class="app-card">
+        <span class="case-label">AI Model — Language Coach</span>
+        <h3>English Learning AI</h3>
+        <p>Hands-free spoken English practice coach — talks with the learner in real time using voice-to-voice AI, no typing or mic-tapping required.</p>
+        <a class="btn btn-outline" href="https://englishpractice.space" target="_blank" rel="noopener">Visit App →</a>
+      </div>
+      <div class="app-card">
+        <span class="case-label">AI Model — Digital Twin</span>
+        <h3>Cloned AI</h3>
+        <p>Lets a ProTalk member create their own AI clone in their own voice and persona, so friends can chat with it when they're unavailable.</p>
+      </div>
+      <div class="app-card">
+        <span class="case-label">AI Model — Sales Conversations</span>
+        <h3>GroqBot</h3>
+        <p>Auto-replies to inbound WhatsApp messages from customers who've just received a sales outreach message — friendly, concise, and on-topic, with voice note transcription and spoken replies.</p>
       </div>
     </div>
   </div>
@@ -619,7 +663,8 @@
       </div>
       <div class="full" style="display:flex; gap:14px; flex-wrap:wrap;">
         <button type="submit" class="btn btn-primary">Book Strategy Call</button>
-        <button type="button" class="btn btn-outline" id="payProjectBtn">💳 Pay for Your Project</button>
+        <button type="button" class="btn btn-outline" id="payProjectUpiBtn">🇮🇳 Pay for Your Project (India)</button>
+        <button type="button" class="btn btn-outline" id="payProjectIntlBtn">🌍 Pay for Your Project (International)</button>
       </div>
     </form>
   </div>
@@ -723,10 +768,29 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="bioModalOverlay">
+  <div class="modal">
+    <button class="modal-close" id="bioModalClose">✕</button>
+    <div style="display:flex; align-items:center; gap:14px; margin-bottom:14px;">
+      <img src="assets/MyProfilePic.jpg" alt="Madhavi Poranki" style="width:56px; height:56px; border-radius:50%; object-fit:cover; flex-shrink:0;">
+      <div>
+        <h3 style="margin-bottom:2px;">Madhavi Poranki</h3>
+        <p style="color:var(--muted); font-size:13px; margin-bottom:0;">Tech Lead, PinkisAppStudio</p>
+      </div>
+    </div>
+    <p style="color:var(--text); font-size:14px; line-height:1.6;">Madhavi leads engineering strategy and delivery across PinkisAppStudio's product portfolio. She's a Tech Lead at Microsoft with a background in large-scale data migration and quality/test leadership, and brings that same rigor to the studio's work — architecture, cloud infrastructure, and production operations across apps like ProTalk, UrShop, Janoos, and ILoveU, taking each from idea to a live, running system.</p>
+  </div>
+</div>
+
 <div class="modal-overlay" id="payModalOverlay">
   <div class="modal">
     <button class="modal-close" id="payModalClose">✕</button>
     <h3>Pay for Your Project</h3>
+
+    <div id="payMethodTabs" style="display:flex; gap:8px; margin-bottom:16px;">
+      <button type="button" class="btn btn-primary pay-method-tab" data-method="upi" style="flex:1; justify-content:center; font-size:13px; padding:9px;">🇮🇳 UPI (India)</button>
+      <button type="button" class="btn btn-outline pay-method-tab" data-method="paypal" style="flex:1; justify-content:center; font-size:13px; padding:9px;">🌍 PayPal (International)</button>
+    </div>
 
     <form id="payDetailsForm">
       <p>Enter the amount you were quoted (INR, via UPI).</p>
@@ -747,12 +811,30 @@
       <p id="payStatus" class="manual-upi-status" style="color:var(--muted); font-size:13px; margin-top:10px; min-height:1.2em;"></p>
     </form>
 
+    <form id="payIntlDetailsForm" hidden>
+      <p>Enter the amount you were quoted (USD, via PayPal).</p>
+      <div><label>Full Name</label><input type="text" name="name" placeholder="Full Name" required></div>
+      <div><label>Email Address</label><input type="email" name="email" placeholder="Email Address" required></div>
+      <div><label>Amount ($)</label><input type="number" name="amount" placeholder="e.g. 50" min="1" step="0.01" required></div>
+      <div><button type="submit" class="btn btn-primary" id="payIntlDetailsBtn" style="width:100%; justify-content:center;">Continue to Pay</button></div>
+      <p id="payIntlDetailsStatus" class="manual-upi-status" style="color:var(--muted); font-size:13px; margin-top:10px; min-height:1.2em;"></p>
+    </form>
+
+    <form id="payIntlTxnForm" hidden>
+      <p><a id="payIntlLink" class="btn btn-outline" href="#" target="_blank" rel="noopener" style="width:100%; justify-content:center; text-decoration:none;">🌍 Pay with PayPal</a></p>
+      <p style="color:var(--muted); font-size:13px; margin:10px 0;">Send $<span id="payIntlAmount"></span> to <span id="payIntlName"></span> on PayPal, then paste the transaction ID below.</p>
+      <div><label>PayPal Transaction ID</label><input type="text" name="txnId" placeholder="e.g. 3AB123456C789012D" required></div>
+      <div><button type="submit" class="btn btn-primary" id="payIntlProceedBtn" style="width:100%; justify-content:center;">Submit Payment</button></div>
+      <p id="payIntlStatus" class="manual-upi-status" style="color:var(--muted); font-size:13px; margin-top:10px; min-height:1.2em;"></p>
+    </form>
+
     <p id="payDoneMsg" hidden style="color:var(--muted); font-size:14px;">Submitted — we verify payments manually, usually within a few hours. We'll follow up by email once confirmed.</p>
   </div>
 </div>
 
 <script src="/qrcode.min.js"></script>
 <script src="/manual-upi-widget.js"></script>
+<script src="/manual-intl-widget.js"></script>
 <script>
   document.getElementById('callbackTab').addEventListener('click', () => {
     document.getElementById('modalOverlay').classList.add('open');
@@ -762,6 +844,16 @@
   });
   document.getElementById('modalOverlay').addEventListener('click', (e) => {
     if (e.target.id === 'modalOverlay') document.getElementById('modalOverlay').classList.remove('open');
+  });
+
+  document.getElementById('madhaviNameTrigger').addEventListener('click', () => {
+    document.getElementById('bioModalOverlay').classList.add('open');
+  });
+  document.getElementById('bioModalClose').addEventListener('click', () => {
+    document.getElementById('bioModalOverlay').classList.remove('open');
+  });
+  document.getElementById('bioModalOverlay').addEventListener('click', (e) => {
+    if (e.target.id === 'bioModalOverlay') document.getElementById('bioModalOverlay').classList.remove('open');
   });
 
   // Pay for Your Project — manual UPI deep link + UTR (verified manually in admin)
@@ -781,12 +873,51 @@
     transactionNote: 'Project Payment',
     buildSubmitBody: (fields, utr) => ({ ...fields, utr, visitorId: getVisitorId() }),
   });
-  document.getElementById('payProjectBtn').addEventListener('click', () => {
-    payWidget.open({
+  // Pay for Your Project — manual PayPal link + transaction ID (verified manually in admin),
+  // for customers outside India where UPI doesn't apply.
+  const intlPayWidget = ManualIntlWidget.init({
+    modalOverlayId: 'payModalOverlay',
+    modalCloseId: 'payModalClose',
+    detailsFormId: 'payIntlDetailsForm',
+    amountFieldName: 'amount',
+    txnFormId: 'payIntlTxnForm',
+    txnFieldName: 'txnId',
+    payLinkId: 'payIntlLink',
+    paypalNameSpanId: 'payIntlName',
+    amountSpanId: 'payIntlAmount',
+    doneMsgId: 'payDoneMsg',
+    buildSubmitBody: (fields, txnId) => ({ ...fields, txnId, visitorId: getVisitorId() }),
+  });
+
+  // Method tabs — switching hides the other method's forms so only one
+  // widget's step-2 is visible/active at a time.
+  function setPayMethod(method) {
+    document.querySelectorAll('.pay-method-tab').forEach(btn => {
+      const active = btn.dataset.method === method;
+      btn.classList.toggle('btn-primary', active);
+      btn.classList.toggle('btn-outline', !active);
+    });
+    document.getElementById('payDetailsForm').hidden = method !== 'upi';
+    document.getElementById('payUtrForm').hidden = true;
+    document.getElementById('payIntlDetailsForm').hidden = method !== 'paypal';
+    document.getElementById('payIntlTxnForm').hidden = true;
+    document.getElementById('payDoneMsg').hidden = true;
+  }
+  document.querySelectorAll('.pay-method-tab').forEach(btn => {
+    btn.addEventListener('click', () => setPayMethod(btn.dataset.method));
+  });
+
+  function openPayModal(method) {
+    const prefill = {
       name: document.querySelector('#mainForm [name="name"]')?.value.trim(),
       email: document.querySelector('#mainForm [name="email"]')?.value.trim(),
-    });
-  });
+    };
+    payWidget.open(prefill);
+    intlPayWidget.open(prefill); // resets the PayPal forms too, since only one widget's open() runs the shared overlay/doneMsg reset
+    setPayMethod(method);
+  }
+  document.getElementById('payProjectUpiBtn').addEventListener('click', () => openPayModal('upi'));
+  document.getElementById('payProjectIntlBtn').addEventListener('click', () => openPayModal('paypal'));
 
   function handleSubmit(form, isCallback){
     form.addEventListener('submit', function(e){

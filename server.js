@@ -8,6 +8,7 @@ const jwt            = require('jsonwebtoken');
 const rateLimit       = require('express-rate-limit');
 const crypto          = require('crypto'); // used for generating payment reference IDs
 const { mountManualUpiKit } = require('./manual-upi-kit');
+const { mountManualIntlKit } = require('./manual-intl-kit');
 const getClientIp = require('./website-visitors');
 
 const app = express();
@@ -37,8 +38,10 @@ const PaymentSchema = new mongoose.Schema({
   email:           String,
   amount:          String,
   currency:        String,
+  method:          { type: String, enum: ['upi', 'paypal'], default: 'upi' },
   status:          { type: String, enum: ['pending', 'completed', 'rejected'], default: 'pending' },
-  utr:             String,
+  utr:             String, // UPI reference number (method: 'upi')
+  txnId:           String, // PayPal transaction id (method: 'paypal')
   visitorId:       String,
   createdDate:     { type: Date, default: Date.now },
   lastUpdatedDate: { type: Date, default: Date.now },
@@ -47,8 +50,12 @@ const Payment = mongoose.model('Payment', PaymentSchema);
 
 const ADMIN_UPI_ID = process.env.ADMIN_UPI_ID || '';
 const ADMIN_UPI_NAME = process.env.ADMIN_UPI_NAME || 'PinkisAppStudio';
+const ADMIN_PAYPAL_ME_LINK = process.env.ADMIN_PAYPAL_ME_LINK || '';
+const ADMIN_PAYPAL_NAME = process.env.ADMIN_PAYPAL_NAME || 'PinkisAppStudio';
 const MIN_PAYMENT = 1;
 const MAX_PAYMENT = 100000; // sanity ceiling — a mistyped amount shouldn't try to charge millions
+const MIN_PAYMENT_USD = 1;
+const MAX_PAYMENT_USD = 5000;
 
 app.use(cors());
 app.use(express.json());
@@ -95,6 +102,38 @@ mountManualUpiKit(app, {
     await Payment.create({
       transactionId, name, email, amount: amount.toFixed(2), currency: 'INR',
       status: 'pending', utr, visitorId
+    });
+  },
+  onApprove: (req) => Payment.findByIdAndUpdate(
+    req.params.key, { status: 'completed', lastUpdatedDate: new Date() }, { new: true }
+  ),
+  onReject: (req) => Payment.findByIdAndUpdate(
+    req.params.key, { status: 'rejected', lastUpdatedDate: new Date() }, { new: true }
+  ),
+});
+
+// ═══════════════════════════════════════════════════
+// Manual PayPal payment — "Pay for Your Project" checkout, international
+// customers (UPI doesn't apply outside India). See manual-intl-kit.js for
+// the reusable backend piece and manual-intl-widget.js for the frontend.
+// ═══════════════════════════════════════════════════
+mountManualIntlKit(app, {
+  paypalMeLink: ADMIN_PAYPAL_ME_LINK,
+  paypalName: ADMIN_PAYPAL_NAME,
+  currency: 'USD',
+  adminAuth,
+  getAmount: async (req) => {
+    const value = Number(req.body?.amount);
+    return (!Number.isFinite(value) || value < MIN_PAYMENT_USD || value > MAX_PAYMENT_USD) ? NaN : value;
+  },
+  onSubmit: async (req, { amount, currency, txnId }) => {
+    const name = String(req.body?.name || '').slice(0, 200);
+    const email = String(req.body?.email || '').slice(0, 200);
+    const visitorId = req.body?.visitorId ? String(req.body.visitorId).slice(0, 64) : '';
+    const transactionId = 'proj_' + crypto.randomBytes(6).toString('hex');
+    await Payment.create({
+      transactionId, name, email, amount: amount.toFixed(2), currency, method: 'paypal',
+      status: 'pending', txnId, visitorId
     });
   },
   onApprove: (req) => Payment.findByIdAndUpdate(
