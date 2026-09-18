@@ -54,6 +54,10 @@
   .members-section { background: #1a1a2e; border: 1px solid #2a2a4a; border-radius: 14px; padding: 1.25rem 1.5rem; }
   .members-header { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.2rem; }
   .members-header h2 { font-size: 1.1rem; flex: 1; }
+  .filter-select {
+    padding: .5rem .8rem; border-radius: 8px; border: 1px solid #2a2a4a;
+    background: #0f0f1a; color: #e0e0e0; font-size: .88rem; outline: none;
+  }
 
   table { width: 100%; border-collapse: collapse; font-size: .85rem; }
   thead th {
@@ -106,6 +110,11 @@
     <div class="members-section">
       <div class="members-header">
         <h2>🧭 Visitors</h2>
+        <select class="filter-select" id="visitorTypeFilter" onchange="renderVisitors()">
+          <option value="all">All visitors</option>
+          <option value="real">👤 Real only</option>
+          <option value="other">🤖 Others (bot / proxy / no interaction)</option>
+        </select>
         <button class="login-btn" style="width:auto;padding:.45rem 1.2rem;font-size:.85rem" id="deleteVisitorsBtn" onclick="deleteSelectedVisitors()" disabled>🗑 Delete Selected</button>
       </div>
       <p style="color:#888;font-size:.8rem;margin:-4px 0 12px">Everyone who opened pinkisappstudio.space — IP, ISP and city work without any permission; precise pin only if they allow location. "Type" flags datacenter/proxy IPs, which is where most bots & crawlers come from.</p>
@@ -224,18 +233,31 @@ async function apiFetch(url, method) {
   return res.json();
 }
 
+let visitorsData = [];
+
+function isRealVisitor(v) {
+  return !(v.ipHosting || v.uaBot) && !v.ipProxy && v.hadInteraction !== false;
+}
+
 async function loadVisitors() {
   const data = await apiFetch('/api/admin/visitors');
   if (!data.success) return;
-  const visitors = data.visitors;
+  visitorsData = data.visitors;
   document.getElementById('statTotal').textContent = data.stats.total;
   document.getElementById('statReal').textContent  = data.stats.real;
   document.getElementById('statBots').textContent  = data.stats.bots;
   document.getElementById('statNoInteraction').textContent = data.stats.noInteraction;
+  renderVisitors();
+}
 
+function renderVisitors() {
+  const filter = document.getElementById('visitorTypeFilter').value;
+  const visitors = filter === 'real' ? visitorsData.filter(isRealVisitor)
+    : filter === 'other' ? visitorsData.filter(v => !isRealVisitor(v))
+    : visitorsData;
   const body = document.getElementById('visitorsBody');
   if (!visitors.length) {
-    body.innerHTML = '<tr class="empty-row"><td colspan="9">No visitors yet.</td></tr>';
+    body.innerHTML = `<tr class="empty-row"><td colspan="9">${visitorsData.length ? 'No visitors match this filter.' : 'No visitors yet.'}</td></tr>`;
   } else {
     body.innerHTML = visitors.map(v => {
       const loc = v.ipCity ? [v.ipCity, v.ipRegion].filter(Boolean).join(', ') : '-';
