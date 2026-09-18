@@ -9,7 +9,7 @@ const rateLimit       = require('express-rate-limit');
 const crypto          = require('crypto'); // used for generating payment reference IDs
 const { mountManualUpiKit } = require('./manual-upi-kit');
 const { mountManualIntlKit } = require('./manual-intl-kit');
-const getClientIp = require('./website-visitors');
+const { getClientIp, isBotUserAgent, lookupIpLocation } = require('./website-visitors');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -214,34 +214,6 @@ const AppVisitorSchema = new mongoose.Schema({
   lastUpdatedDate: { type: Date, default: Date.now },
 });
 const AppVisitor = mongoose.model('AppVisitor', AppVisitorSchema);
-
-// Free IP geolocation, no API key/consent needed. Skips loopback/private ranges.
-async function lookupIpLocation(ip) {
-  if (!ip || ip === '::1' || ip.startsWith('127.') || ip.startsWith('10.') || ip.startsWith('192.168.')) {
-    return null;
-  }
-  try {
-    const r = await fetch(`http://ip-api.com/json/${ip}?fields=status,city,regionName,country,isp,proxy,hosting,mobile`);
-    const data = await r.json();
-    if (data.status !== 'success') return null;
-    return {
-      ipCity: data.city, ipRegion: data.regionName, ipCountry: data.country, ipIsp: data.isp,
-      ipProxy: data.proxy, ipHosting: data.hosting, ipMobile: data.mobile
-    };
-  } catch (err) {
-    console.error('IP lookup failed:', err.message);
-    return null;
-  }
-}
-
-// Real browsers never send an empty UA or self-identify as a bot/crawler/scanner --
-// catches things like "RadixAbuseResearch/1.0" that IP-hosting/proxy checks miss
-// because they run from ordinary residential/mobile IPs.
-const BOT_UA_PATTERN = /\bbot\b|crawler|spider|scraper|slurp|research|scan(ner)?|monitor|uptimerobot|pingdom|curl\/|wget\/|python-requests|python-urllib|go-http-client|okhttp|libwww-perl|apache-httpclient|headlesschrome|phantomjs|selenium|puppeteer|facebookexternalhit|bingpreview|ahrefsbot|semrushbot|mj12bot|dotbot|petalbot|bytespider|censys|shodan|masscan|nmap|zgrab|nuclei|netcraft/i;
-function isBotUserAgent(ua) {
-  if (!ua) return true;
-  return BOT_UA_PATTERN.test(ua);
-}
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
