@@ -663,8 +663,7 @@
       </div>
       <div class="full" style="display:flex; gap:14px; flex-wrap:wrap;">
         <button type="submit" class="btn btn-primary">Book Strategy Call</button>
-        <button type="button" class="btn btn-outline" id="payProjectUpiBtn">🇮🇳 Pay for Your Project (India)</button>
-        <button type="button" class="btn btn-outline" id="payProjectIntlBtn">🌍 Pay for Your Project (International)</button>
+        <button type="button" class="btn btn-outline" id="payProjectBtn">💳 Pay for Project</button>
       </div>
     </form>
   </div>
@@ -916,8 +915,7 @@
     intlPayWidget.open(prefill); // resets the PayPal forms too, since only one widget's open() runs the shared overlay/doneMsg reset
     setPayMethod(method);
   }
-  document.getElementById('payProjectUpiBtn').addEventListener('click', () => openPayModal('upi'));
-  document.getElementById('payProjectIntlBtn').addEventListener('click', () => openPayModal('paypal'));
+  document.getElementById('payProjectBtn').addEventListener('click', () => openPayModal('upi'));
 
   function handleSubmit(form, isCallback){
     form.addEventListener('submit', function(e){
