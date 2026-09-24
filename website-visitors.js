@@ -30,6 +30,7 @@
 //   const { getClientIp, isBotUserAgent, lookupIpLocation } = require('./website-visitors');
 //   const ip = getClientIp(req);
 //   const uaBot = isBotUserAgent(req.headers['user-agent']);
+//   const real = isRealVisitor(visitorDoc); // true only with positive human proof
 //   const geo = await lookupIpLocation(ip); // null for private/loopback IPs or a failed lookup
 
 const IPV4_OR_IPV6 = /^[0-9a-fA-F:.]+$/;
@@ -48,9 +49,28 @@ function getClientIp(req) {
 }
 
 const BOT_UA_PATTERN = /\bbot\b|crawler|spider|scraper|slurp|research|scan(ner)?|monitor|uptimerobot|pingdom|curl\/|wget\/|python-requests|python-urllib|go-http-client|okhttp|libwww-perl|apache-httpclient|headlesschrome|phantomjs|selenium|puppeteer|facebookexternalhit|bingpreview|ahrefsbot|semrushbot|mj12bot|dotbot|petalbot|bytespider|censys|shodan|masscan|nmap|zgrab|nuclei|netcraft/i;
+// Real Chrome/Edge always send a full four-part version (e.g. Chrome/124.0.6367.60,
+// or Chrome/124.0.0.0 under UA reduction) and a "Mozilla/5.0" prefix. Scripted
+// clients that hand-write a UA typically get this wrong ("Chrome/124.0").
+function hasMalformedBrowserUa(ua) {
+  if (!/^Mozilla\/5\.0 /.test(ua)) return true;
+  const chrome = ua.match(/(?:Chrome|Chromium|Edg|CriOS)\/([\d.]+)/);
+  if (chrome && !/^\d+\.\d+\.\d+\.\d+$/.test(chrome[1])) return true;
+  return false;
+}
 function isBotUserAgent(ua) {
   if (!ua) return true;
-  return BOT_UA_PATTERN.test(ua);
+  return BOT_UA_PATTERN.test(ua) || hasMalformedBrowserUa(ua);
+}
+
+// Positive proof of a human, not just absence of bot signals: a clean IP and
+// UA, real interaction, and enough time on the page. Anything unproven
+// (including a visit whose behavior beacon hasn't arrived yet) is NOT real.
+const MIN_HUMAN_DWELL_MS = 3000;
+function isRealVisitor(v) {
+  if (!v || v.ipHosting || v.ipProxy) return false;
+  if (v.uaBot || isBotUserAgent(v.userAgent)) return false;
+  return v.hadInteraction === true && Number(v.dwellMs) >= MIN_HUMAN_DWELL_MS;
 }
 
 async function lookupIpLocation(ip) {
@@ -78,4 +98,4 @@ async function lookupIpLocation(ip) {
   }
 }
 
-module.exports = { getClientIp, isBotUserAgent, lookupIpLocation };
+module.exports = { getClientIp, isBotUserAgent, isRealVisitor, lookupIpLocation };
