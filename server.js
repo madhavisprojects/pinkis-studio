@@ -38,7 +38,8 @@ const PaymentSchema = new mongoose.Schema({
   email:           String,
   amount:          String,
   currency:        String,
-  method:          { type: String, enum: ['upi', 'paypal'], default: 'upi' },
+  method:          { type: String, enum: ['upi', 'paypal', 'cashfree'], default: 'upi' },
+  phone:           String, // cashfree only (Cashfree requires a customer mobile)
   status:          { type: String, enum: ['pending', 'completed', 'rejected'], default: 'pending' },
   utr:             String, // UPI reference number (method: 'upi')
   txnId:           String, // PayPal transaction id (method: 'paypal')
@@ -58,6 +59,57 @@ const MIN_PAYMENT_USD = 1;
 const MAX_PAYMENT_USD = 5000;
 
 app.use(cors());
+
+// ═══════════════════════════════════════════════════
+// Cashfree online payment — separate "/pay" page (UPI/cards/netbanking).
+// Mounted BEFORE express.json(): the webhook signature is verified on the
+// raw body, which the global JSON parser below would otherwise consume.
+// See cashfree.js / cashfree-routes.js (copied from teenaprojects/cashfree-kit).
+// ═══════════════════════════════════════════════════
+if (process.env.CASHFREE_APP_ID && process.env.CASHFREE_SECRET_KEY) {
+  const { createCashfreeRouter } = require('./cashfree-routes');
+  const cashfreeLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false,
+    message: { error: 'Too many payment attempts. Please try again later.' }
+  });
+  app.use('/api/cashfree/create', cashfreeLimiter);
+  app.use('/api/cashfree', createCashfreeRouter({
+    publicBaseUrl: process.env.PUBLIC_BASE_URL || `http://localhost:${PORT}`,
+    returnPath: '/pay',
+    // Clients pay whatever amount they were quoted (same reasoning as the manual flows above).
+    resolvePayment: async (req) => {
+      const amount = Number(req.body?.amount);
+      if (!Number.isFinite(amount) || amount < MIN_PAYMENT || amount > MAX_PAYMENT) {
+        throw new Error(`Amount must be between ₹${MIN_PAYMENT} and ₹${MAX_PAYMENT}`);
+      }
+      const name = String(req.body?.name || '').trim().slice(0, 200);
+      const email = String(req.body?.email || '').trim().slice(0, 200);
+      const phone = String(req.body?.phone || '').replace(/\D/g, '').slice(-10);
+      if (!name || !email) throw new Error('Name and email are required');
+      return {
+        amount, customerId: 'web_' + crypto.randomBytes(6).toString('hex'),
+        customerPhone: phone, customerEmail: email, note: 'PinkisAppStudio project payment',
+        meta: { name, email, phone, visitorId: req.body?.visitorId ? String(req.body.visitorId).slice(0, 64) : '' },
+      };
+    },
+    saveOrder: (o) => Payment.create({
+      transactionId: o.orderId, name: o.meta.name, email: o.meta.email, phone: o.meta.phone,
+      amount: Number(o.amount).toFixed(2), currency: 'INR', method: 'cashfree',
+      status: 'pending', visitorId: o.meta.visitorId
+    }),
+    findOrder: async (orderId) => {
+      const p = await Payment.findOne({ transactionId: orderId, method: 'cashfree' }).lean();
+      return p && { orderId, amount: Number(p.amount), status: p.status === 'completed' ? 'PAID' : 'CREATED' };
+    },
+    markPaid: (orderId) => Payment.updateOne(
+      { transactionId: orderId }, { status: 'completed', lastUpdatedDate: new Date() }
+    ),
+  }));
+} else {
+  console.warn('⚠️   CASHFREE_APP_ID / CASHFREE_SECRET_KEY not set — /pay online payments disabled.');
+}
+app.get(['/pay', '/pay/return'], (req, res) => res.sendFile(path.join(__dirname, 'pay.html')));
+
 app.use(express.json());
 // express.static(__dirname) below serves the whole app directory, so without
 // this guard .git/, .env, .ebextensions/ etc. are all publicly downloadable —

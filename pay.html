@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pay for Your Project | PinkisAppStudio</title>
+<meta name="robots" content="noindex">
+<style>
+  :root { --bg:#f6f8fb; --card:#fff; --border:#e4e8f0; --text:#101828; --muted:#5b6478; --navy:#0b1f4b; --accent:#2952e3; --accent-dark:#1d3fc0; --ok:#12805c; --err:#c0341d; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:var(--bg); color:var(--text); }
+  .wrap { max-width: 440px; margin: 0 auto; padding: 24px 16px 48px; }
+  .brand { color:var(--navy); font-weight:700; font-size:18px; text-decoration:none; display:inline-block; margin-bottom:16px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:22px 18px; }
+  h1 { font-size:22px; margin:0 0 4px; color:var(--navy); }
+  p.sub { margin:0 0 18px; color:var(--muted); font-size:14px; }
+  label { display:block; font-size:13px; font-weight:600; margin:14px 0 6px; }
+  input { width:100%; padding:12px; font-size:16px; border:1px solid var(--border); border-radius:10px; }
+  input:focus { outline:2px solid var(--accent); border-color:transparent; }
+  button { width:100%; margin-top:20px; padding:14px; font-size:16px; font-weight:600; color:#fff; background:var(--accent); border:0; border-radius:10px; cursor:pointer; }
+  button:hover { background:var(--accent-dark); }
+  button:disabled { opacity:.6; cursor:default; }
+  .msg { margin-top:14px; font-size:14px; min-height:20px; }
+  .msg.err { color:var(--err); } .msg.ok { color:var(--ok); font-weight:600; }
+  .note { margin-top:16px; font-size:12px; color:var(--muted); text-align:center; }
+  .hidden { display:none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="brand" href="/">PinkisAppStudio</a>
+  <div class="card">
+    <div id="formView">
+      <h1>Pay for Your Project</h1>
+      <p class="sub">Pay the amount quoted for your project via UPI, card or net banking.</p>
+      <form id="payForm" novalidate>
+        <label for="name">Full name</label>
+        <input id="name" autocomplete="name" required>
+        <label for="email">Email</label>
+        <input id="email" type="email" autocomplete="email" required>
+        <label for="phone">Mobile (10 digits)</label>
+        <input id="phone" type="tel" inputmode="numeric" autocomplete="tel" maxlength="14" required>
+        <label for="amount">Amount (₹)</label>
+        <input id="amount" type="number" inputmode="decimal" min="1" max="100000" step="0.01" required>
+        <button id="payBtn" type="submit">Pay now</button>
+      </form>
+      <div id="msg" class="msg" role="status"></div>
+      <p class="note">Secure checkout by Cashfree Payments. We never see your card or UPI details.</p>
+    </div>
+    <div id="doneView" class="hidden">
+      <h1 id="doneTitle"></h1>
+      <p class="sub" id="doneText"></p>
+      <a class="brand" href="/">Back to site</a>
+    </div>
+  </div>
+</div>
+
+<script src="https://sdk.cashfree.com/js/v3/cashfree.js"></script>
+<script>
+  const $ = id => document.getElementById(id);
+  const msg = (t, cls) => { $('msg').textContent = t || ''; $('msg').className = 'msg ' + (cls || ''); };
+
+  function showDone(title, text) {
+    $('formView').classList.add('hidden'); $('doneView').classList.remove('hidden');
+    $('doneTitle').textContent = title; $('doneText').textContent = text;
+  }
+
+  // The server asks Cashfree; the browser/URL is never trusted. Webhook may land a few seconds late.
+  async function confirm(orderId) {
+    for (let i = 0; i < 10; i++) {
+      try {
+        const d = await (await fetch('/api/cashfree/status/' + encodeURIComponent(orderId))).json();
+        if (d.paid) return true;
+      } catch (e) {}
+      await new Promise(r => setTimeout(r, 2000));
+    }
+    return false;
+  }
+
+  async function finish(orderId) {
+    $('formView').classList.add('hidden'); $('doneView').classList.remove('hidden');
+    $('doneTitle').textContent = 'Confirming your payment...'; $('doneText').textContent = '';
+    if (await confirm(orderId)) {
+      showDone('Payment received', 'Thank you! We have received your payment and will be in touch shortly.');
+    } else {
+      showDone('Still confirming', 'If money was deducted, it will show as received shortly. Contact pinkisstudiop@gmail.com with your order id ' + orderId + ' if it does not.');
+    }
+  }
+
+  // Returned from Cashfree checkout (redirect flow)
+  const returned = new URLSearchParams(location.search).get('order_id');
+  if (returned) finish(returned);
+
+  $('payForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    msg('');
+    const body = {
+      name: $('name').value.trim(), email: $('email').value.trim(),
+      phone: $('phone').value.trim(), amount: $('amount').value,
+      visitorId: (function () { try { return localStorage.getItem('visitorId') || ''; } catch (e) { return ''; } })(),
+    };
+    $('payBtn').disabled = true; msg('Starting secure checkout...');
+    try {
+      const r = await fetch('/api/cashfree/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Could not start payment');
+      const cf = Cashfree({ mode: d.mode === 'production' ? 'production' : 'sandbox' });
+      if (d.redirect) {
+        cf.checkout({ paymentSessionId: d.paymentSessionId, redirectTarget: '_self' });
+      } else {
+        // Plain-http (local testing): popup checkout, then confirm with the server.
+        const res = await cf.checkout({ paymentSessionId: d.paymentSessionId, redirectTarget: '_modal' });
+        if (res && res.error) { msg(res.error.message || 'Payment was not completed', 'err'); $('payBtn').disabled = false; return; }
+        finish(d.orderId);
+      }
+    } catch (err) {
+      msg(err.message, 'err'); $('payBtn').disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
