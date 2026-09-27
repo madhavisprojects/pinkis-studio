@@ -4,15 +4,12 @@
 // Same copy-paste-per-app pattern as paddle-kit.js / paypal-kit.js — no
 // shared package, each app gets its own copy wired to its own model.
 //
-// Unlike a payment gateway (Paddle, Razorpay, FamGateway...), there's no
-// callback/webhook and no third-party account, KYC, or fees: the payer
-// opens their own UPI app via a deep link to your own UPI ID, then pastes
-// the UTR/reference number back into your form. A human verifies it in the
-// admin panel (approve/reject) before anything is marked paid/activated.
-// This is deliberately the fallback when a real gateway isn't available or
-// wanted — see the FamGateway saga (2026-09-07) for why: it required a
-// separate FamPay account + KYC just to get a payable UPI handle, and even
-// then routed through a bank we didn't want to depend on. Manual UPI keeps
+// Unlike a payment gateway (Paddle, Razorpay...), there's no callback/webhook
+// and no third-party account, KYC, or fees: the payer opens their own UPI app
+// via a deep link to your own UPI ID, then pastes the UTR/reference number
+// back into your form. A human verifies it in the admin panel (approve/
+// reject) before anything is marked paid/activated. This is deliberately the
+// fallback when a real gateway isn't available or wanted. Manual UPI keeps
 // you dealing directly with your own bank, no intermediary to trust.
 //
 // IMPORTANT — the `am` (amount) param is deliberately left out of the UPI
